@@ -18,7 +18,7 @@ func NewIRQ() *IRQ {
 	}
 }
 
-var IRQOutOfBounds = errors.New("Out of bounds")
+var IRQOutOfBounds = errors.New("out of bounds")
 
 func (i *IRQ) Set(irq uint) error {
 	if irq >= 8 {
