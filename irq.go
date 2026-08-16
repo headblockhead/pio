@@ -2,19 +2,26 @@ package pio
 
 import "errors"
 
-type IRQReadWriter interface {
+type IRQState bool
+
+const (
+	IRQSet     IRQState = true
+	IRQCleared          = false
+)
+
+type IRQSetClearReader interface {
 	Set(irq uint) error
 	Clear(irq uint) error
-	Read(irq uint) (state bool, err error)
+	Read(irq uint) (state IRQState, err error)
 }
 
 type IRQ struct {
-	irqs [8]bool
+	irqs [8]IRQState
 }
 
 func NewIRQ() *IRQ {
 	return &IRQ{
-		irqs: [8]bool{},
+		irqs: [8]IRQState{},
 	}
 }
 
@@ -24,7 +31,7 @@ func (i *IRQ) Set(irq uint) error {
 	if irq >= 8 {
 		return IRQOutOfBounds
 	}
-	i.irqs[irq] = true
+	i.irqs[irq] = IRQSet
 	return nil
 }
 
@@ -32,11 +39,11 @@ func (i *IRQ) Clear(irq uint) error {
 	if irq >= 8 {
 		return IRQOutOfBounds
 	}
-	i.irqs[irq] = false
+	i.irqs[irq] = IRQCleared
 	return nil
 }
 
-func (i *IRQ) Read(irq uint) (state bool, err error) {
+func (i *IRQ) Read(irq uint) (state IRQState, err error) {
 	if irq >= 8 {
 		return false, IRQOutOfBounds
 	}

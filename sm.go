@@ -8,21 +8,24 @@ const (
 )
 
 type SM struct {
+	id uint
+
 	im   InstructionMemoryReader
 	rx   FIFOWriter
 	tx   FIFOReader
 	irq  IRQ
-	pins [30]PinPeripheralIO
+	pins [32]PinPeripheralIO
 
-	execStalled     bool
-	sideEnable      bool
-	sidePindir      bool
+	stalled     bool
+
+	sidesetOptional      bool
+	sidesetControlsPinDirection      bool
 	jumpPin         uint
-	outEnableBit    uint
+	inlineOutEnableBit    uint
 	inlineOutEnable bool
-	outSticky       bool
+	sticky       bool
 	wrapTop         uint
-	wrapBottom      uint // Target
+	wrapBottom      uint
 	statusSelection StatusSelection
 	statusN         uint
 
@@ -37,6 +40,7 @@ type SM struct {
 
 	addr  uint
 	instr uint16
+	stickyInstr uint16
 
 	sidesetCount uint
 	setCount     uint
@@ -60,69 +64,142 @@ func (sm *SM) Fetch() error {
 	if err != nil {
 		return err
 	}
-	sm.addr++
+	if sm.addr == sm.wrapTop {
+		sm.addr = sm.wrapBottom
+	} else {
+		sm.addr = (sm.addr + 1) & 0b11111
+	}
 	return nil
 }
 
+type SMInstruction uint
+
+const (
+	SMInstructionJump     SMInstruction = 0b000
+	SMInstructionWait                   = 0b001
+	SMInstructionIn                     = 0b010
+	SMInstructionOut                    = 0b011
+	SMInstructionPushPull               = 0b100
+	SMInstructionMove                   = 0b101
+	SMInstructionIRQ                    = 0b110
+	SMInstructionSet                    = 0b111
+)
+
 func (sm *SM) Execute() error {
-	var instructionType uint = (uint)(sm.instr>>13) & 0b111
+	var instructionType SMInstruction = (SMInstruction)(sm.instr>>13) & 0b111
 	switch instructionType {
-	case 0b000:
-		sm.ExecuteJump((uint)(sm.instr>>5)&0b111, (uint)(sm.instr)&0b11111)
-	case 0b001:
-		sm.ExecuteWait()
-	case 0b010:
-		sm.ExecuteIn()
-	case 0b011:
+	case SMInstructionJump:
+		sm.ExecuteJump((JumpCondition)(sm.instr>>5)&0b111, (uint)(sm.instr)&0b11111)
+	case SMInstructionWait:
+		sm.ExecuteWait(((sm.instr>>7)&0b1) == 1, (WaitSource)(sm.instr>>5)&0b11, (uint)(sm.instr)&0b11111)
+	case SMInstructionIn:
+		sm.ExecuteIn((InSource)(sm.instr>>5)&0b111, (uint)(sm.instr&0b11111))
+	case SMInstructionOut:
 		sm.ExecuteOut()
-	case 0b100:
+	case SMInstructionPushPull:
 		sm.ExecutePushOrPull()
-	case 0b101:
+	case SMInstructionMove:
 		sm.ExecuteMove()
-	case 0b110:
+	case SMInstructionIRQ:
 		sm.ExecuteIRQ()
-	case 0b111:
+	case SMInstructionSet:
 		sm.ExecuteSet()
 	}
+
 }
 
-func (sm *SM) decrementX() {
-	if sm.x == 0 {
-		sm.x = 31
-	} else {
-		sm.x--
-	}
-}
-func (sm *SM) decrementY() {
-	if sm.y == 0 {
-		sm.y = 31
-	} else {
-		sm.y--
-	}
-}
-func (sm *SM) ExecuteJump(condition uint, address uint) {
-	shouldJump := false
+type JumpCondition uint
+
+const (
+	JumpAlways                JumpCondition = 0b000
+	JumpXZero                               = 0b001
+	JumpXNonZeroThenDecrement               = 0b010
+	JumpYZero                               = 0b011
+	JumpYNonZeroThenDecrement               = 0b100
+	JumpXNotEqualY                          = 0b101
+	JumpPin                                 = 0b110
+	JumpOSRENotEmpty                        = 0b111
+)
+
+func (sm *SM) ExecuteJump(condition JumpCondition, address uint) {
+	var shouldJump bool
 	switch condition {
-	case 0b000:
+	case JumpAlways:
 		shouldJump = true
-	case 0b001:
+	case JumpXZero:
 		shouldJump = (sm.x == 0)
-	case 0b010:
+	case JumpXNonZeroThenDecrement:
 		shouldJump = (sm.x != 0)
-		sm.decrementX()
-	case 0b011:
+		sm.x--
+	case JumpYZero:
 		shouldJump = (sm.y == 0)
-	case 0b100:
+	case JumpYNonZeroThenDecrement:
 		shouldJump = (sm.y != 0)
-		sm.decrementY()
-	case 0b101:
+		sm.y--
+	case JumpXNotEqualY:
 		shouldJump = (sm.x != sm.y)
-	case 0b110:
+	case JumpPin:
 		shouldJump = (sm.pins[sm.jumpPin].GetInput())
-	case 0b111:
+	case JumpOSRENotEmpty:
 		shouldJump = sm.osrShiftCounter != sm.pullThreshold
 	}
 	if shouldJump {
 		sm.addr = address
+	}
+}
+
+type WaitSource uint
+
+const (
+	WaitSourceGPIO WaitSource = 0b00
+	WaitSourcePin             = 0b01
+	WaitSourceIRQ             = 0b10
+)
+
+func (sm *SM) ExecuteWait(polarity bool, source WaitSource, index uint) error {
+	var continueWaiting bool
+	switch source {
+	case WaitSourceGPIO:
+		continueWaiting = (sm.pins[index].GetInput() == polarity)
+	case WaitSourcePin:
+		continueWaiting = (sm.pins[(sm.inBase+index)%32].GetInput() == polarity)
+	case WaitSourceIRQ:
+		var relative bool = ((index >> 4) & 0b1) == 1
+		var irqIndex uint = index & 0b111
+		if relative {
+			var lowerBits uint = index & 0b11
+			var upperBit uint = index & 0b100
+			lowerBits = (lowerBits + sm.id) & 0b11
+			irqIndex = upperBit | lowerBits
+		}
+		irqSet, err := sm.irq.Read(irqIndex)
+		if err != nil {
+			return err
+		}
+		continueWaiting = irqSet == polarity
+		if polarity == true && !continueWaiting {
+			sm.irq.Clear(irqIndex)
+		}
+	}
+	sm.execStalled = continueWaiting
+	return nil
+}
+
+type InSource uint
+
+const (
+	InSourcePins InSource = 0b000
+	InSourceX             = 0b001
+	InSourceY             = 0b010
+	InSourceNull          = 0b011
+	InSourceISR           = 0b110
+	InSourceOSR           = 0b111
+)
+
+func (sm *SM) ExecuteIn(source InSource, bits uint) error {
+	switch source {
+	case InSourcePins:
+		if sm.inShiftdir == 
+		sm.isr
 	}
 }
