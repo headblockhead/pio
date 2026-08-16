@@ -1,40 +1,6 @@
 package pio
 
-type PinPeripheralIO interface {
-	SetOutput(bool)
-	SetOutputEnable(bool)
-	GetInput() bool
-}
-
-type PinGPIO interface {
-	GetOutput() bool
-	GetOutputEnable() bool
-	SetInput(bool)
-}
-
 type Pin struct {
-	output       bool
-	outputEnable bool
-	input        bool
-}
-
-func (p *Pin) SetOutput(output bool) {
-	p.output = output
-}
-func (p *Pin) GetOutput() bool {
-	return p.output
-}
-func (p *Pin) SetOutputEnable(outputEnable bool) {
-	p.outputEnable = outputEnable
-}
-func (p *Pin) GetOutputEnable() bool {
-	return p.outputEnable
-}
-func (p *Pin) GetInput() bool {
-	return p.input
-}
-func (p *Pin) SetInput(input bool) {
-	p.input = input
 }
 
 type MuxerPinPeripheralIO interface {

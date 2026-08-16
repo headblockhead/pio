@@ -47,9 +47,6 @@ type GPIOControl interface {
 }
 
 type GPIO struct {
-	padGPIO  PadGPIO
-	muxerPin MuxerPinGPIO
-
 	inputOverride        InputOverride
 	outputEnableOverride OutputEnableOverride
 	outputOverride       OutputOverride
