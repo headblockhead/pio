@@ -1,9 +1,9 @@
 package pio
 
-type InputOverride int
-type OutputEnableOverride int
-type OutputOverride int
-type GPIOFunction int
+type InputOverride uint
+type OutputEnableOverride uint
+type OutputOverride uint
+type GPIOFunction uint
 
 const (
 	InputOverrideNormal InputOverride = iota
@@ -81,9 +81,11 @@ func (g *GPIO) InputToPeripheral() bool {
 	}
 	return false
 }
+
 func (g *GPIO) InputFromPad() bool {
 	return g.padGPIO.GetInput()
 }
+
 func (g *GPIO) OutputEnableToPad() bool {
 	switch g.outputEnableOverride {
 	case OutputEnableOverrideNormal:
@@ -97,9 +99,11 @@ func (g *GPIO) OutputEnableToPad() bool {
 	}
 	return false
 }
+
 func (g *GPIO) OutputEnableFromPeripheral() bool {
 	return g.muxerPin.GetOutputEnable(g.function)
 }
+
 func (g *GPIO) OutputToPad() bool {
 	switch g.outputOverride {
 	case OutputOverrideNormal:
@@ -113,6 +117,7 @@ func (g *GPIO) OutputToPad() bool {
 	}
 	return false
 }
+
 func (g *GPIO) OutputFromPeripheral() bool {
 	return g.muxerPin.GetOutput(g.function)
 }
@@ -120,24 +125,31 @@ func (g *GPIO) OutputFromPeripheral() bool {
 func (g *GPIO) SetInputOverride(inputOverride InputOverride) {
 	g.inputOverride = inputOverride
 }
+
 func (g *GPIO) GetInputOverride() InputOverride {
 	return g.inputOverride
 }
+
 func (g *GPIO) SetOutputEnableOverride(outputEnableOverride OutputEnableOverride) {
 	g.outputEnableOverride = outputEnableOverride
 }
+
 func (g *GPIO) GetOutputEnableOverride() OutputEnableOverride {
 	return g.outputEnableOverride
 }
+
 func (g *GPIO) SetOutputOverride(outputOverride OutputOverride) {
 	g.outputOverride = outputOverride
 }
+
 func (g *GPIO) GetOutputOverride() OutputOverride {
 	return g.outputOverride
 }
+
 func (g *GPIO) SetFunction(function GPIOFunction) {
 	g.function = function
 }
+
 func (g *GPIO) GetFunction() GPIOFunction {
 	return g.function
 }
