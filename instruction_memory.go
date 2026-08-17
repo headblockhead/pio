@@ -20,18 +20,18 @@ func NewInstructionMemory() *InstructionMemory {
 	}
 }
 
-var IMOutOfBounds = errors.New("out of bounds")
+var ErrAddressOutOfBounds = errors.New("out of bounds")
 
 func (im *InstructionMemory) Read(address uint) (value uint16, err error) {
 	if address >= 32 {
-		return 0, IMOutOfBounds
+		return 0, ErrAddressOutOfBounds
 	}
 	return im.memory[address], nil
 }
 
 func (im *InstructionMemory) Write(address uint, value uint16) error {
 	if address >= 32 {
-		return IMOutOfBounds
+		return ErrAddressOutOfBounds
 	}
 	im.memory[address] = value
 	return nil
