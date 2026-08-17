@@ -1,17 +1,13 @@
 package pio
 
-// Mode used for the 'MOV x, STATUS' instruction.
 type StatusSelection uint
 
 const (
-	// STATUS reads as '1's if the TX FIFO's level is less than statusComparisonLevel, otherwise STATUS reads as '0's.
 	StatusSelectionTXLevel StatusSelection = iota
-	// STATUS reads as '1's if the RX FIFO's level is less than statusComparisonLevel, otherwise STATUS reads as '0's.
 	StatusSelectionRXLevel
 )
 
 type SM struct {
-	// id is the number of the state machine within the PIO block.
 	id uint
 
 	instructionMemory InstructionMemoryReader
@@ -43,6 +39,7 @@ type SM struct {
 	addr        uint
 	instr       uint16
 	stickyInstr uint16
+	systemInstr uint16
 
 	sidesetCount uint
 	setCount     uint
@@ -60,13 +57,14 @@ type SM struct {
 	y               uint32
 }
 
-func NewSM(id uint, instructionMemory InstructionMemoryReader, pins PIOPinsManipulator) *SM {
+func NewSM(id uint, instructionMemory InstructionMemoryReader, pins PinsSMs, irqs IRQSMs) *SM {
 	return &SM{
 		id:                id,
 		instructionMemory: instructionMemory,
 		fifoRX:            NewFIFO(4),
 		fifoTX:            NewFIFO(4),
 		pins:              pins,
+		irqs:              irqs,
 	}
 }
 
@@ -110,13 +108,13 @@ type SMInstruction uint
 
 const (
 	SMInstructionJump     SMInstruction = 0b000
-	SMInstructionWait                   = 0b001
-	SMInstructionIn                     = 0b010
-	SMInstructionOut                    = 0b011
-	SMInstructionPushPull               = 0b100
-	SMInstructionMove                   = 0b101
-	SMInstructionIRQ                    = 0b110
-	SMInstructionSet                    = 0b111
+	SMInstructionWait     SMInstruction = 0b001
+	SMInstructionIn       SMInstruction = 0b010
+	SMInstructionOut      SMInstruction = 0b011
+	SMInstructionPushPull SMInstruction = 0b100
+	SMInstructionMove     SMInstruction = 0b101
+	SMInstructionIRQ      SMInstruction = 0b110
+	SMInstructionSet      SMInstruction = 0b111
 )
 
 func (sm *SM) Execute() error {
@@ -145,13 +143,13 @@ type JumpCondition uint
 
 const (
 	JumpAlways                JumpCondition = 0b000
-	JumpXZero                               = 0b001
-	JumpXNonZeroThenDecrement               = 0b010
-	JumpYZero                               = 0b011
-	JumpYNonZeroThenDecrement               = 0b100
-	JumpXNotEqualY                          = 0b101
-	JumpPin                                 = 0b110
-	JumpOSRENotEmpty                        = 0b111
+	JumpXZero                 JumpCondition = 0b001
+	JumpXNonZeroThenDecrement JumpCondition = 0b010
+	JumpYZero                 JumpCondition = 0b011
+	JumpYNonZeroThenDecrement JumpCondition = 0b100
+	JumpXNotEqualY            JumpCondition = 0b101
+	JumpPin                   JumpCondition = 0b110
+	JumpOSRENotEmpty          JumpCondition = 0b111
 )
 
 func (sm *SM) ExecuteJump(condition JumpCondition, address uint) {
@@ -185,8 +183,8 @@ type WaitSource uint
 
 const (
 	WaitSourceGPIO WaitSource = 0b00
-	WaitSourcePin             = 0b01
-	WaitSourceIRQ             = 0b10
+	WaitSourcePin  WaitSource = 0b01
+	WaitSourceIRQ  WaitSource = 0b10
 )
 
 func (sm *SM) ExecuteWait(polarity bool, source WaitSource, index uint) error {
@@ -224,11 +222,11 @@ type InSource uint
 
 const (
 	InSourcePins InSource = 0b000
-	InSourceX             = 0b001
-	InSourceY             = 0b010
-	InSourceNull          = 0b011
-	InSourceISR           = 0b110
-	InSourceOSR           = 0b111
+	InSourceX    InSource = 0b001
+	InSourceY    InSource = 0b010
+	InSourceNull InSource = 0b011
+	InSourceISR  InSource = 0b110
+	InSourceOSR  InSource = 0b111
 )
 
 func (sm *SM) ExecuteIn(source InSource, bits uint) error {
