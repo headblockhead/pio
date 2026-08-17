@@ -1,5 +1,7 @@
 package pio
 
+import "fmt"
+
 type Solver struct {
 	circuits []CircuitSolver
 }
@@ -14,10 +16,10 @@ func (s *Solver) AddCircuit(circuit CircuitSolver) error {
 }
 
 func (s *Solver) Solve() error {
-	for _, circuit := range s.circuits {
+	for i, circuit := range s.circuits {
 		err := circuit.Solve()
 		if err != nil {
-			return err
+			return fmt.Errorf("error solving circuit with index %d: %w", i, err)
 		}
 	}
 	return nil
