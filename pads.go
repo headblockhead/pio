@@ -95,6 +95,9 @@ func (p *Pads) GetInput(pad uint) (PadInput, error) {
 	}
 }
 
+var ErrPadsInvalidPull = errors.New("invalid pull")
+var ErrPadsInvalidInput = errors.New("invalid input")
+
 func (p *Pads) GetState(pad uint) (PadState, error) {
 	if pad >= padCount {
 		return PadStateNone, ErrPadOutOfBounds
@@ -114,14 +117,16 @@ func (p *Pads) GetState(pad uint) (PadState, error) {
 			case PadInputLow:
 				return PadStatePulledDown, nil
 			default:
-				return PadStateNone, nil
+				return PadStateNone, ErrPadsInvalidInput
 			}
 		case PadPullUp:
 			return PadStatePulledUp, nil
 		case PadPullDown:
 			return PadStatePulledDown, nil
-		default:
+		case PadPullNone:
 			return PadStateNone, nil
+		default:
+			return PadStateNone, ErrPadsInvalidPull
 		}
 	}
 }
