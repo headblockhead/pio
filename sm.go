@@ -1,36 +1,38 @@
 package pio
 
-type StatusSelection int
+// Mode used for the 'MOV x, STATUS' instruction.
+type StatusSelection uint
 
 const (
+	// STATUS reads as '1's if the TX FIFO's level is less than statusComparisonLevel, otherwise STATUS reads as '0's.
 	StatusSelectionTXLevel StatusSelection = iota
+	// STATUS reads as '1's if the RX FIFO's level is less than statusComparisonLevel, otherwise STATUS reads as '0's.
 	StatusSelectionRXLevel
 )
 
 type SM struct {
+	// id is the number of the state machine within the PIO block.
 	id uint
 
-	im   InstructionMemoryReader
-	rx   FIFOWriter
-	tx   FIFOReader
-	irq  IRQ
-	pins [32]PinPeripheralIO
+	instructionMemory InstructionMemoryReader
+	fifoRX            *FIFO
+	fifoTX            *FIFO
+	pins              PinsSMs
+	irqs              IRQSMs
 
-	stalled     bool
+	stalled bool
 
-	sidesetOptional      bool
-	sidesetControlsPinDirection      bool
-	jumpPin         uint
-	inlineOutEnableBit    uint
-	inlineOutEnable bool
-	sticky       bool
-	wrapTop         uint
-	wrapBottom      uint
-	statusSelection StatusSelection
-	statusN         uint
+	sidesetOptional             bool
+	sidesetControlsPinDirection bool
+	jumpPin                     uint
+	inlineOutEnableBit          uint
+	inlineOutEnable             bool
+	stickyOut                   bool
+	wrapTop                     uint
+	wrapBottom                  uint
+	statusSelection             StatusSelection
+	statusComparisonLevel       uint
 
-	joinRX        bool
-	joinTX        bool
 	pullThreshold uint
 	pushThreshold uint
 	outShiftdir   bool
@@ -38,8 +40,8 @@ type SM struct {
 	autopull      bool
 	autopush      bool
 
-	addr  uint
-	instr uint16
+	addr        uint
+	instr       uint16
 	stickyInstr uint16
 
 	sidesetCount uint
@@ -58,9 +60,41 @@ type SM struct {
 	y               uint32
 }
 
+func NewSM(id uint, instructionMemory InstructionMemoryReader, pins PIOPinsManipulator) *SM {
+	return &SM{
+		id:                id,
+		instructionMemory: instructionMemory,
+		fifoRX:            NewFIFO(4),
+		fifoTX:            NewFIFO(4),
+		pins:              pins,
+	}
+}
+
+type FIFOJoinMode uint
+
+const (
+	FIFOJoinNone FIFOJoinMode = iota
+	FIFOJoinRX
+	FIFOJoinTX
+)
+
+func (sm *SM) SetFIFOJoinMode(joinMode FIFOJoinMode) {
+	switch joinMode {
+	case FIFOJoinNone:
+		sm.fifoRX = NewFIFO(4)
+		sm.fifoTX = NewFIFO(4)
+	case FIFOJoinRX:
+		sm.fifoRX = NewFIFO(8)
+		sm.fifoTX = NewFIFO(0)
+	case FIFOJoinTX:
+		sm.fifoRX = NewFIFO(0)
+		sm.fifoTX = NewFIFO(8)
+	}
+}
+
 func (sm *SM) Fetch() error {
 	var err error
-	sm.instr, err = sm.im.Read(sm.addr)
+	sm.instr, err = sm.instructionMemory.Read(sm.addr)
 	if err != nil {
 		return err
 	}
@@ -105,7 +139,6 @@ func (sm *SM) Execute() error {
 	case SMInstructionSet:
 		sm.ExecuteSet()
 	}
-
 }
 
 type JumpCondition uint
@@ -172,13 +205,15 @@ func (sm *SM) ExecuteWait(polarity bool, source WaitSource, index uint) error {
 			lowerBits = (lowerBits + sm.id) & 0b11
 			irqIndex = upperBit | lowerBits
 		}
-		irqSet, err := sm.irq.Read(irqIndex)
+		irqState, err := sm.irqs.Read(irqIndex)
 		if err != nil {
 			return err
 		}
-		continueWaiting = irqSet == polarity
+
+		// TODO
+
 		if polarity == true && !continueWaiting {
-			sm.irq.Clear(irqIndex)
+			sm.irqs.Clear(irqIndex)
 		}
 	}
 	sm.execStalled = continueWaiting
@@ -198,8 +233,6 @@ const (
 
 func (sm *SM) ExecuteIn(source InSource, bits uint) error {
 	switch source {
-	case InSourcePins:
-		if sm.inShiftdir == 
-		sm.isr
 	}
+	return nil
 }
