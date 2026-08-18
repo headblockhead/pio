@@ -3,6 +3,7 @@ package pio
 import (
 	"errors"
 	"fmt"
+	"math"
 )
 
 type StatusSelection uint
@@ -17,6 +18,12 @@ const (
 	ShiftDirectionRight ShiftDirection = iota
 	ShiftDirectionLeft
 )
+
+type StickyWriteRecord struct {
+	pin          uint
+	output       *PinOutput
+	outputEnable *PinOutputEnable
+}
 
 type SM struct {
 	id uint
@@ -83,20 +90,29 @@ type SM struct {
 	// The pin used for the JMP PIN instruction.
 	jumpPin uint
 
-	// current instruction address
+	// Clock divider integer component
+	clockDividerInteger uint16
+	// Clock divider fractional component
+	clockDividerFractional uint8
+	// Internal clock accumulator
+	clockAccumulator int32
+
+	// Current instruction address.
 	programCounter uint
-	// currently executing instruction
+	// Currently executing instruction.
 	currentInstruction uint16
-
-	// state flags
-
-	stalled     bool
-	execStalled bool
-
-	sticky      bool
-	stickyInstr uint16
-	exec        bool
-	execInstr   uint16
+	// If the current instruction is stalled.
+	stalled bool
+	// If the instruction that just executed was a successful jump.
+	jumped bool
+	// If there is a forced instruction that is awaiting execution.
+	newForcedInstruction bool
+	// The forced instruction to be executed.
+	forcedInstruction uint16
+	// If there is an EXEC'd instruction awaiting execution.
+	newEXECdInstruction bool
+	// The EXEC'd instruction to be executed.
+	execdInstruction uint16
 
 	outputShiftRegister        uint32
 	outputShiftRegisterCounter uint
@@ -104,6 +120,8 @@ type SM struct {
 	inputShiftRegisterCounter  uint
 	x                          uint32
 	y                          uint32
+
+	stickyWriteRecords []StickyWriteRecord
 }
 
 func NewSM(id uint, instructionMemory InstructionMemoryReader, pins PinsSMs, irqs IRQSMs) *SM {
@@ -116,11 +134,29 @@ func NewSM(id uint, instructionMemory InstructionMemoryReader, pins PinsSMs, irq
 		pins:              pins,
 		irqs:              irqs,
 
-		wrapFromAddress: 31,
-		setCount:        5,
-
-		osrShiftCounter: 32,
+		wrapFromAddress:            31,
+		setCount:                   5,
+		clockAccumulator:           clockDivisorAsQ8(0, 0),
+		outputShiftRegisterCounter: 32,
 	}
+}
+
+var ErrSMClockDivisorOutOfRange = errors.New("clock divisor out of range")
+
+func (sm *SM) SetClockDivisor(divisor float64) error {
+	if divisor < 1.0 || divisor > 65536.0 {
+		return ErrSMClockDivisorOutOfRange
+	}
+	q8 := math.Round(divisor * 256)
+	integer := uint32(q8) >> 8
+	fractional := uint8(uint32(q8) & 0xFF)
+	if integer == 65536 {
+		integer = 0
+		fractional = 0
+	}
+	sm.clockDividerInteger = uint16(integer)
+	sm.clockDividerFractional = fractional
+	return nil
 }
 
 type FIFOJoinMode uint
@@ -152,9 +188,9 @@ func (sm *SM) SetFIFOJoinMode(joinMode FIFOJoinMode) error {
 
 func (sm *SM) Fetch() error {
 	var err error
-	sm.instr, err = sm.instructionMemory.Read(sm.pc)
+	sm.currentInstruction, err = sm.instructionMemory.Read(sm.programCounter)
 	if err != nil {
-		return fmt.Errorf("error fetching instruction from address %d: %w", sm.pc, err)
+		return fmt.Errorf("error reading instruction from address %d: %w", sm.programCounter, err)
 	}
 	return nil
 }
@@ -172,36 +208,62 @@ const (
 	SMInstructionSet      SMInstructionType = 0b111
 )
 
-var ErrSMInvalidInstructionType = errors.New("invalid instruction type")
-
-func (sm *SM) ForceInstruction(instruction uint16) error {
-	sm.execInstr = instruction
-	sm.exec = true
+func (sm *SM) ScheduleForcedInstruction(instruction uint16) error {
+	sm.forcedInstruction = instruction
+	sm.newForcedInstruction = true
 	return nil
 }
 
+var ErrSMInvalidInstructionType = errors.New("invalid instruction type")
+
 func (sm *SM) Execute() error {
-	var instructionType SMInstructionType = (SMInstructionType)(sm.instr>>13) & 0b111
+	instr := sm.currentInstruction
+	var instructionType SMInstructionType = (SMInstructionType)(instr>>13) & 0b111
 	switch instructionType {
 	case SMInstructionJump:
-		sm.ExecuteJump((JumpCondition)(sm.instr>>5)&0b111, (uint)(sm.instr)&0b11111)
+		err := sm.ExecuteJump((JumpCondition)(instr>>5)&0b111, (uint)(instr)&0b11111)
+		if err != nil {
+			return fmt.Errorf("error excecuting jump: %w", err)
+		}
 	case SMInstructionWait:
-		sm.ExecuteWait(((sm.instr>>7)&0b1) == 1, (WaitSource)(sm.instr>>5)&0b11, (uint)(sm.instr)&0b11111)
+		err := sm.ExecuteWait(((instr>>7)&0b1) == 1, (WaitSource)(instr>>5)&0b11, (uint)(instr)&0b11111)
+		if err != nil {
+			return fmt.Errorf("error excecuting wait: %w", err)
+		}
 	case SMInstructionIn:
-		sm.ExecuteIn((InSource)(sm.instr>>5)&0b111, (uint)(sm.instr&0b11111))
+		err := sm.ExecuteIn((InSource)(instr>>5)&0b111, (uint)(instr&0b11111))
+		if err != nil {
+			return fmt.Errorf("error excecuting in: %w", err)
+		}
 	case SMInstructionOut:
-		sm.ExecuteOut()
+		err := sm.ExecuteOut()
+		if err != nil {
+			return fmt.Errorf("error excecuting out: %w", err)
+		}
 	case SMInstructionPushPull:
-		sm.ExecutePushOrPull()
+		err := sm.ExecutePushOrPull()
+		if err != nil {
+			return fmt.Errorf("error excecuting push/pull: %w", err)
+		}
 	case SMInstructionMove:
-		sm.ExecuteMove()
+		err := sm.ExecuteMove()
+		if err != nil {
+			return fmt.Errorf("error excecuting move: %w", err)
+		}
 	case SMInstructionIRQ:
-		sm.ExecuteIRQ()
+		err := sm.ExecuteIRQ()
+		if err != nil {
+			return fmt.Errorf("error excecuting irq: %w", err)
+		}
 	case SMInstructionSet:
-		sm.ExecuteSet()
+		err := sm.ExecuteSet()
+		if err != nil {
+			return fmt.Errorf("error excecuting set: %w", err)
+		}
 	default:
 		return ErrSMInvalidInstructionType
 	}
+	return nil
 }
 
 type JumpCondition uint
@@ -217,7 +279,7 @@ const (
 	JumpOSRENotEmpty          JumpCondition = 0b111
 )
 
-var ErrSMJumpInvalidCondition = errors.New("invalid condition")
+var ErrSMJumpInvalidCondition = errors.New("invalid jump condition")
 
 func (sm *SM) ExecuteJump(condition JumpCondition, address uint) error {
 	var shouldJump bool
@@ -243,13 +305,13 @@ func (sm *SM) ExecuteJump(condition JumpCondition, address uint) error {
 		}
 		shouldJump = (input == PinInputHigh)
 	case JumpOSRENotEmpty:
-		shouldJump = (sm.osrShiftCounter != sm.pullThreshold)
+		shouldJump = (sm.outputShiftRegisterCounter < sm.pullThreshold)
 	default:
 		return ErrSMJumpInvalidCondition
 	}
 	if shouldJump {
-		sm.pc = address
-		sm.justJumped = true
+		sm.programCounter = address
+		sm.jumped = true
 	}
 	return nil
 }
@@ -262,34 +324,58 @@ const (
 	WaitSourceIRQ  WaitSource = 0b10
 )
 
+var ErrSMWaitInvalidSource = errors.New("inavlid wait source")
+
 func (sm *SM) ExecuteWait(polarity bool, source WaitSource, index uint) error {
-	var continueWaiting bool
 	switch source {
 	case WaitSourceGPIO:
-		continueWaiting = (sm.pins[index].GetInput() == polarity)
+		gpioInput, err := sm.pins.GetInput(index)
+		if err != nil {
+			return fmt.Errorf("error getting input of pin %d: %w", index, err)
+		}
+		if polarity == true {
+			sm.stalled = !(gpioInput == PinInputHigh)
+		} else if polarity == false {
+			sm.stalled = !(gpioInput == PinInputLow)
+		}
 	case WaitSourcePin:
-		continueWaiting = (sm.pins[(sm.inBase+index)%32].GetInput() == polarity)
+		pinIndex := (sm.inBase + index) % 32
+		pinInput, err := sm.pins.GetInput(pinIndex)
+		if err != nil {
+			return fmt.Errorf("error getting input of pin %d: %w", pinIndex, err)
+		}
+		if polarity == true {
+			sm.stalled = !(pinInput == PinInputHigh)
+		} else if polarity == false {
+			sm.stalled = !(pinInput == PinInputLow)
+		}
 	case WaitSourceIRQ:
 		var relative bool = ((index >> 4) & 0b1) == 1
 		var irqIndex uint = index & 0b111
 		if relative {
-			var lowerBits uint = index & 0b11
-			var upperBit uint = index & 0b100
+			var upperBit uint = irqIndex & 0b100
+			var lowerBits uint = irqIndex & 0b11
 			lowerBits = (lowerBits + sm.id) & 0b11
 			irqIndex = upperBit | lowerBits
 		}
 		irqState, err := sm.irqs.Read(irqIndex)
 		if err != nil {
-			return err
+			return fmt.Errorf("error reading state of irq %d: %w", irqIndex, err)
 		}
-
-		// TODO
-
-		if polarity == true && !continueWaiting {
-			sm.irqs.Clear(irqIndex)
+		if polarity == true {
+			sm.stalled = !(irqState == IRQSet)
+			if !sm.stalled {
+				err := sm.irqs.Clear(irqIndex)
+				if err != nil {
+					return fmt.Errorf("error clearing irq %d: %w", irqIndex, err)
+				}
+			}
+		} else if polarity == false {
+			sm.stalled = !(irqState == IRQCleared)
 		}
+	default:
+		return ErrSMWaitInvalidSource
 	}
-	sm.execStalled = continueWaiting
 	return nil
 }
 
@@ -304,35 +390,92 @@ const (
 	InSourceOSR  InSource = 0b111
 )
 
+var ErrSMInInvalidSource = errors.New("invalid in source")
+
 func (sm *SM) ExecuteIn(source InSource, bits uint) error {
 	switch source {
+	case InSourcePins:
+	case InSourceX:
+		// etc... TODO
+	default:
+		return ErrSMInInvalidSource
 	}
 	return nil
 }
 
-func (sm *SM) SystemTick() error {
-
-	if sm.exec == true {
-		sm.Execute()
-
-		// only if stalls
-		sm.instr = sm.execInstr
+func clockDivisorAsQ8(integer uint16, fractional uint8) int32 {
+	intPart := int32(integer)
+	if intPart == 0 {
+		intPart = 65536
 	}
+	return (intPart << 8) | int32(fractional)
+}
+
+func (sm *SM) SystemTick() error {
+	sm.clockAccumulator -= 1 << 8
+	if sm.stickyOutSetAssertion {
+		for i, record := range sm.stickyWriteRecords {
+			if record.output != nil {
+				err := sm.pins.SetOutput(record.pin, *record.output)
+				if err != nil {
+					return fmt.Errorf("error applying sticky pin write %d for pin %d's output: %w", i, record.pin, err)
+				}
+			}
+			if record.outputEnable != nil {
+				err := sm.pins.SetOutputEnable(record.pin, *record.outputEnable)
+				if err != nil {
+					return fmt.Errorf("error applying sticky pin write %d for pin %d's output enable: %w", i, record.pin, err)
+				}
+			}
+		}
+	}
+	if sm.newForcedInstruction {
+		sm.currentInstruction = sm.forcedInstruction
+		err := sm.Execute()
+		if err != nil {
+			return fmt.Errorf("error executing forced instruction: %w", err)
+		}
+		if !sm.stalled {
+			sm.newForcedInstruction = false
+		}
+	} else if sm.clockAccumulator <= 0 {
+		sm.clockAccumulator += clockDivisorAsQ8(sm.clockDividerInteger, sm.clockDividerFractional)
+		err := sm.Tick()
+		if err != nil {
+			return fmt.Errorf("error performing tick: %w", err)
+		}
+	}
+	return nil
 }
 
 func (sm *SM) Tick() error {
-
-	//  do instructions
-
-	if !sm.justJumped {
-		if sm.pc == sm.wrapTop {
-			sm.pc = sm.wrapBottom
-		} else {
-			sm.pc = (sm.pc + 1) & 0b11111
+	if sm.newEXECdInstruction {
+		sm.currentInstruction = sm.execdInstruction
+		sm.newEXECdInstruction = false
+	} else if !sm.stalled {
+		err := sm.Fetch()
+		if err != nil {
+			return fmt.Errorf("error fetching: %w", err)
 		}
 	}
-
-	if sm.sticky == true {
+	err := sm.Execute()
+	if err != nil {
+		return fmt.Errorf("error executing an instruction: %w", err)
 	}
-
+	if !sm.stalled && !sm.newEXECdInstruction && !sm.jumped {
+		if sm.programCounter == sm.wrapFromAddress {
+			sm.programCounter = sm.wrapToAddress
+		} else {
+			sm.programCounter = (sm.programCounter + 1) % 32
+		}
+	}
+	if sm.autopull && sm.outputShiftRegisterCounter >= sm.pullThreshold && !sm.fifoTX.IsEmpty() {
+		osr, err := sm.fifoTX.Read()
+		if err != nil {
+			return fmt.Errorf("error reading TX FIFO for autopull: %w", err)
+		}
+		sm.outputShiftRegister = osr
+		sm.outputShiftRegisterCounter = 0
+	}
+	return nil
 }
