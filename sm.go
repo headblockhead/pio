@@ -8,6 +8,7 @@ import (
 
 type StatusSelection uint
 type ShiftDirection uint
+type SMInstructionType uint
 
 const (
 	// If TX FIFO level is < statusComparisonLevel, returns all '1's.
@@ -17,6 +18,15 @@ const (
 
 	ShiftDirectionRight ShiftDirection = iota
 	ShiftDirectionLeft
+
+	SMInstructionJump     SMInstructionType = 0b000
+	SMInstructionWait     SMInstructionType = 0b001
+	SMInstructionIn       SMInstructionType = 0b010
+	SMInstructionOut      SMInstructionType = 0b011
+	SMInstructionPushPull SMInstructionType = 0b100
+	SMInstructionMove     SMInstructionType = 0b101
+	SMInstructionIRQ      SMInstructionType = 0b110
+	SMInstructionSet      SMInstructionType = 0b111
 )
 
 type StickyWriteRecord struct {
@@ -114,6 +124,9 @@ type SM struct {
 	// The EXEC'd instruction to be executed.
 	execdInstruction uint16
 
+	// The type of the instruction that is stored in currentInstruction.
+	currentInstructionType SMInstructionType
+
 	outputShiftRegister        uint32
 	outputShiftRegisterCounter uint
 	inputShiftRegister         uint32
@@ -186,6 +199,12 @@ func (sm *SM) SetFIFOJoinMode(joinMode FIFOJoinMode) error {
 	return nil
 }
 
+func (sm *SM) ScheduleForcedInstruction(instruction uint16) error {
+	sm.forcedInstruction = instruction
+	sm.newForcedInstruction = true
+	return nil
+}
+
 func (sm *SM) Fetch() error {
 	var err error
 	sm.currentInstruction, err = sm.instructionMemory.Read(sm.programCounter)
@@ -195,22 +214,8 @@ func (sm *SM) Fetch() error {
 	return nil
 }
 
-type SMInstructionType uint
-
-const (
-	SMInstructionJump     SMInstructionType = 0b000
-	SMInstructionWait     SMInstructionType = 0b001
-	SMInstructionIn       SMInstructionType = 0b010
-	SMInstructionOut      SMInstructionType = 0b011
-	SMInstructionPushPull SMInstructionType = 0b100
-	SMInstructionMove     SMInstructionType = 0b101
-	SMInstructionIRQ      SMInstructionType = 0b110
-	SMInstructionSet      SMInstructionType = 0b111
-)
-
-func (sm *SM) ScheduleForcedInstruction(instruction uint16) error {
-	sm.forcedInstruction = instruction
-	sm.newForcedInstruction = true
+func (sm *SM) Decode() error {
+	sm.currentInstructionType = (SMInstructionType)(sm.currentInstruction>>13) & 0b111
 	return nil
 }
 
@@ -218,25 +223,39 @@ var ErrSMInvalidInstructionType = errors.New("invalid instruction type")
 
 func (sm *SM) Execute() error {
 	instr := sm.currentInstruction
-	var instructionType SMInstructionType = (SMInstructionType)(instr>>13) & 0b111
-	switch instructionType {
+	switch sm.currentInstructionType {
 	case SMInstructionJump:
-		err := sm.ExecuteJump((JumpCondition)(instr>>5)&0b111, (uint)(instr)&0b11111)
+		condition := (JumpCondition)(instr>>5) & 0b111
+		address := (uint)(instr) & 0b11111
+		err := sm.ExecuteJump(condition, address)
 		if err != nil {
 			return fmt.Errorf("error excecuting jump: %w", err)
 		}
 	case SMInstructionWait:
-		err := sm.ExecuteWait(((instr>>7)&0b1) == 1, (WaitSource)(instr>>5)&0b11, (uint)(instr)&0b11111)
+		polarity := ((instr >> 7) & 0b1) == 1
+		source := (WaitSource)(instr>>5) & 0b11
+		index := (uint)(instr) & 0b11111
+		err := sm.ExecuteWait(polarity, source, index)
 		if err != nil {
 			return fmt.Errorf("error excecuting wait: %w", err)
 		}
 	case SMInstructionIn:
-		err := sm.ExecuteIn((InSource)(instr>>5)&0b111, (uint)(instr&0b11111))
+		source := (InSource)(instr>>5) & 0b111
+		numberOfBits := (uint)(instr & 0b11111)
+		if numberOfBits == 0 {
+			numberOfBits = 32
+		}
+		err := sm.ExecuteIn(source, numberOfBits)
 		if err != nil {
 			return fmt.Errorf("error excecuting in: %w", err)
 		}
 	case SMInstructionOut:
-		err := sm.ExecuteOut()
+		destination := (OutDestination)(instr>>5) & 0b111
+		numberOfBits := (uint)(instr & 0b11111)
+		if numberOfBits == 0 {
+			numberOfBits = 32
+		}
+		err := sm.ExecuteOut(destination, numberOfBits)
 		if err != nil {
 			return fmt.Errorf("error excecuting out: %w", err)
 		}
@@ -391,16 +410,110 @@ const (
 )
 
 var ErrSMInInvalidSource = errors.New("invalid in source")
+var ErrSMInInvalidPinState = errors.New("invalid pin state")
+var ErrSMInInvalidShiftDirection = errors.New("invalid shift direction")
 
 func (sm *SM) ExecuteIn(source InSource, bits uint) error {
-	switch source {
-	case InSourcePins:
-	case InSourceX:
-		// etc... TODO
-	default:
-		return ErrSMInInvalidSource
+	if !sm.stalled {
+		var inData uint32
+		var i uint
+		switch source {
+		case InSourcePins:
+			for i = 0; i < bits; i++ {
+				pinNumber := (sm.inBase + i) % 32
+				pinState, err := sm.pins.GetInput(pinNumber)
+				if err != nil {
+					return fmt.Errorf("error getting input to pin %d: %w", pinNumber, err)
+				}
+				switch pinState {
+				case PinInputHigh:
+					inData = (inData << 1) | 0b1
+				case PinInputLow:
+					inData = (inData << 1) | 0b0
+				default:
+					return ErrSMInInvalidPinState
+				}
+			}
+		case InSourceX:
+			for i = 0; i < bits; i++ {
+				bit := ((sm.x >> i) & 0b1)
+				inData = (inData << 1) | bit
+			}
+		case InSourceY:
+			for i = 0; i < bits; i++ {
+				bit := ((sm.y >> i) & 0b1)
+				inData = (inData << 1) | bit
+			}
+		case InSourceNull:
+			// Data is all zeros, no action needed.
+		case InSourceISR:
+			for i = 0; i < bits; i++ {
+				bit := ((sm.inputShiftRegister >> i) & 0b1)
+				inData = (inData << 1) | bit
+			}
+		case InSourceOSR:
+			for i = 0; i < bits; i++ {
+				bit := ((sm.outputShiftRegister >> i) & 0b1)
+				inData = (inData << 1) | bit
+			}
+		default:
+			return ErrSMInInvalidSource
+		}
+
+		switch sm.inShiftdir {
+		case ShiftDirectionLeft:
+			for i = 0; i < bits; i++ {
+				bit := (inData >> i) & 0b1
+				sm.inputShiftRegister = (sm.inputShiftRegister << 1) | bit
+			}
+		case ShiftDirectionRight:
+			for i = 0; i < bits; i++ {
+				bit := (inData >> (bits - (i + 1))) & 0b1
+				rightAlignedBit := (bit << 31)
+				sm.inputShiftRegister = (sm.inputShiftRegister >> 1) | rightAlignedBit
+			}
+		default:
+			return ErrSMInInvalidShiftDirection
+		}
+		sm.inputShiftRegisterCounter += bits
+	}
+	if sm.autopush && !sm.fifoRX.IsFull() {
+		sm.fifoRX.Write(sm.inputShiftRegister)
+		sm.inputShiftRegister = 0
+		sm.inputShiftRegisterCounter = 0
+	} else if sm.autopush {
+		sm.stalled = true
 	}
 	return nil
+}
+
+type OutDestination uint
+
+const (
+	OutDestinationPins               = 0b000
+	OutDestinationX                  = 0b001
+	OutDestinationY                  = 0b010
+	OutDestinationNull               = 0b011
+	OutDestinationPinDirections      = 0b100
+	OutDestinationProgramCounter     = 0b101
+	OutDestinationInputShiftRegister = 0b110
+	OutDestinationEXEC               = 0b111
+)
+
+func (sm *SM) AutoPull() error {
+	if sm.outputShiftRegisterCounter >= sm.pullThreshold && !sm.fifoTX.IsEmpty() {
+		osr, err := sm.fifoTX.Read()
+		if err != nil {
+			return fmt.Errorf("error reading TX FIFO for autopull: %w", err)
+		}
+		sm.outputShiftRegister = osr
+		sm.outputShiftRegisterCounter = 0
+	}
+	return nil
+}
+
+func (sm *SM) ExecuteOut(destination OutDestination, bits uint) error {
+
 }
 
 func clockDivisorAsQ8(integer uint16, fractional uint8) int32 {
@@ -458,10 +571,26 @@ func (sm *SM) Tick() error {
 			return fmt.Errorf("error fetching: %w", err)
 		}
 	}
-	err := sm.Execute()
+
+	err := sm.Decode()
+	if err != nil {
+		return fmt.Errorf("error decoding: %w", err)
+	}
+
+	if sm.currentInstructionType != SMInstructionOut && sm.autopull {
+		err = sm.AutoPull()
+		if err != nil {
+			return fmt.Errorf("error performing autopull: %w", err)
+		}
+	}
+
+	sm.jumped = false
+
+	err = sm.Execute()
 	if err != nil {
 		return fmt.Errorf("error executing an instruction: %w", err)
 	}
+
 	if !sm.stalled && !sm.newEXECdInstruction && !sm.jumped {
 		if sm.programCounter == sm.wrapFromAddress {
 			sm.programCounter = sm.wrapToAddress
@@ -469,13 +598,6 @@ func (sm *SM) Tick() error {
 			sm.programCounter = (sm.programCounter + 1) % 32
 		}
 	}
-	if sm.autopull && sm.outputShiftRegisterCounter >= sm.pullThreshold && !sm.fifoTX.IsEmpty() {
-		osr, err := sm.fifoTX.Read()
-		if err != nil {
-			return fmt.Errorf("error reading TX FIFO for autopull: %w", err)
-		}
-		sm.outputShiftRegister = osr
-		sm.outputShiftRegisterCounter = 0
-	}
+
 	return nil
 }
