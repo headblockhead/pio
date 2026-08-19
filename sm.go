@@ -50,10 +50,10 @@ type SM struct {
 	// Use sideset to control the direction of pins, rather than the output value of pins.
 	sidesetControlsPinDirection bool
 	// Use a bit from OUT data to enable/disable writing pin data.
-	// If stickyOutSetAssertion is enabled, a '0' bit deasserts the latest write.
-	inlineOutEnableIsUsed bool
-	// Which bit of OUT data is used for inlineOutEnable.
-	inlineOutEnableBit uint
+	// If stickyOutSetAssertion is enabled, a '0' bit also prevents the write from being 'stickied'.
+	inlineOutWriteEnableIsUsed bool
+	// Which bit of OUT data is used for inlineOutWriteEnable.
+	inlineOutWriteEnableBit uint
 	// Perform the most recent OUT/SET pin data write repeatedly every tick.
 	stickyOutSetAssertion bool
 	// When the programCounter reaches wrapFromAddress, it will be set to wrapToAddress.
@@ -83,7 +83,7 @@ type SM struct {
 	sidesetBase uint
 	// The number of bits (starting from the most significant bit) used for side-set values.
 	// This includes the bit used for sidesetIsOptional, if that is enabled.
-	sidesetCount uint
+	sidesetBitCount uint
 	// The lowest pin affected by a SET PINS/PINDIRS instruction, which takes the value of the least significant bit.
 	setBase uint
 	// The number of pins asserted by a SET instruction.
@@ -123,6 +123,8 @@ type SM struct {
 	newEXECdInstruction bool
 	// The EXEC'd instruction to be executed.
 	execdInstruction uint16
+	// The amount of cycles of delay left to be completed.
+	delays uint
 
 	// The type of the instruction that is stored in currentInstruction.
 	currentInstructionType SMInstructionType
@@ -265,6 +267,9 @@ func (sm *SM) Execute() error {
 			return fmt.Errorf("error excecuting push/pull: %w", err)
 		}
 	case SMInstructionMove:
+
+		// remember, MOV PINS also affected by inlineOutWriteEnable
+
 		err := sm.ExecuteMove()
 		if err != nil {
 			return fmt.Errorf("error excecuting move: %w", err)
@@ -409,9 +414,10 @@ const (
 	InSourceOSR  InSource = 0b111
 )
 
+var ErrSMInvalidShiftDirection = errors.New("invalid shift direction")
+
 var ErrSMInInvalidSource = errors.New("invalid in source")
 var ErrSMInInvalidPinState = errors.New("invalid pin state")
-var ErrSMInInvalidShiftDirection = errors.New("invalid shift direction")
 
 func (sm *SM) ExecuteIn(source InSource, bits uint) error {
 	if !sm.stalled {
@@ -459,7 +465,6 @@ func (sm *SM) ExecuteIn(source InSource, bits uint) error {
 		default:
 			return ErrSMInInvalidSource
 		}
-
 		switch sm.inShiftdir {
 		case ShiftDirectionLeft:
 			for i = 0; i < bits; i++ {
@@ -473,16 +478,22 @@ func (sm *SM) ExecuteIn(source InSource, bits uint) error {
 				sm.inputShiftRegister = (sm.inputShiftRegister >> 1) | rightAlignedBit
 			}
 		default:
-			return ErrSMInInvalidShiftDirection
+			return ErrSMInvalidShiftDirection
 		}
 		sm.inputShiftRegisterCounter += bits
 	}
-	if sm.autopush && !sm.fifoRX.IsFull() {
-		sm.fifoRX.Write(sm.inputShiftRegister)
-		sm.inputShiftRegister = 0
-		sm.inputShiftRegisterCounter = 0
-	} else if sm.autopush {
-		sm.stalled = true
+	sm.stalled = false
+	if sm.autopush && sm.inputShiftRegisterCounter >= sm.pushThreshold {
+		if !sm.fifoRX.IsFull() {
+			err := sm.fifoRX.Write(sm.inputShiftRegister)
+			if err != nil {
+				return fmt.Errorf("error writing RX FIFO for autopush: %w", err)
+			}
+			sm.inputShiftRegister = 0
+			sm.inputShiftRegisterCounter = 0
+		} else {
+			sm.stalled = true
+		}
 	}
 	return nil
 }
@@ -500,20 +511,122 @@ const (
 	OutDestinationEXEC               = 0b111
 )
 
-func (sm *SM) AutoPull() error {
-	if sm.outputShiftRegisterCounter >= sm.pullThreshold && !sm.fifoTX.IsEmpty() {
-		osr, err := sm.fifoTX.Read()
-		if err != nil {
-			return fmt.Errorf("error reading TX FIFO for autopull: %w", err)
-		}
-		sm.outputShiftRegister = osr
-		sm.outputShiftRegisterCounter = 0
-	}
-	return nil
-}
+var ErrSMOutInvalidDestination = errors.New("invalid out destination")
 
 func (sm *SM) ExecuteOut(destination OutDestination, bits uint) error {
+	sm.stalled = false
+	if sm.autopull && sm.outputShiftRegisterCounter >= sm.pullThreshold {
+		if !sm.fifoTX.IsEmpty() {
+			osr, err := sm.fifoTX.Read()
+			if err != nil {
+				return fmt.Errorf("error reading TX FIFO for pre-out autopull: %w", err)
+			}
+			sm.outputShiftRegister = osr
+			sm.outputShiftRegisterCounter = 0
+		} else {
+			sm.stalled = true
+		}
+	} else {
+		var outData uint32
+		var i uint
+		switch sm.outShiftdir {
+		case ShiftDirectionLeft:
+			for i = 0; i < bits; i++ {
+				bit := ((sm.outputShiftRegister << i) & 0b10000000000000000000000000000000) >> 31
+				outData = (outData << 1) | bit
+			}
+			sm.outputShiftRegister = (sm.outputShiftRegister << bits)
+		case ShiftDirectionRight:
+			for i = 0; i < bits; i++ {
+				bit := (sm.outputShiftRegister >> (bits - (i + 1))) & 0b1
+				outData = (outData << 1) | bit
+			}
+			sm.outputShiftRegister = (sm.outputShiftRegister >> bits)
+		default:
+			return ErrSMInvalidShiftDirection
+		}
+		sm.outputShiftRegisterCounter += bits
 
+		var doWrite bool = true
+		if sm.inlineOutWriteEnableIsUsed {
+			doWrite = ((outData >> sm.inlineOutWriteEnableBit) & 0b1) == 1
+		}
+
+		sm.stickyWriteRecords = []StickyWriteRecord{}
+
+		switch destination {
+		case OutDestinationPins:
+			if doWrite {
+				for i = 0; i < sm.outCount; i++ {
+					pinNumber := (sm.outBase + i) % 32
+					bit := (((outData >> i) & 0b1) == 1)
+					var err error
+					var output PinOutput
+					if bit == true {
+						output = PinOutputHigh
+					} else if bit == false {
+						output = PinOutputLow
+					}
+					err = sm.pins.SetOutput(pinNumber, output)
+					if err != nil {
+						return fmt.Errorf("error setting pin %d's output: %w", pinNumber, err)
+					}
+					sm.stickyWriteRecords = append(sm.stickyWriteRecords, StickyWriteRecord{
+						pin:    pinNumber,
+						output: &output,
+					})
+				}
+			}
+		case OutDestinationX:
+			sm.x = outData
+		case OutDestinationY:
+			sm.y = outData
+		case OutDestinationNull:
+			// No action required, discards data.
+		case OutDestinationPinDirections:
+			if doWrite {
+				for i = 0; i < sm.outCount; i++ {
+					pinNumber := (sm.outBase + i) % 32
+					bit := (((outData >> i) & 0b1) == 1)
+					var err error
+					var outputEnable PinOutputEnable
+					if bit == true {
+						outputEnable = PinOutputEnabled
+					} else if bit == false {
+						outputEnable = PinOutputNotEnabled
+					}
+					err = sm.pins.SetOutputEnable(pinNumber, outputEnable)
+					if err != nil {
+						return fmt.Errorf("error setting pin %d's output enable: %w", pinNumber, err)
+					}
+					sm.stickyWriteRecords = append(sm.stickyWriteRecords, StickyWriteRecord{
+						pin:          pinNumber,
+						outputEnable: &outputEnable,
+					})
+				}
+			}
+		case OutDestinationProgramCounter:
+			sm.programCounter = (uint)(outData % 32)
+			sm.jumped = true
+		case OutDestinationInputShiftRegister:
+			sm.inputShiftRegister = outData
+			sm.inputShiftRegisterCounter = bits
+		case OutDestinationEXEC:
+			sm.execdInstruction = (uint16)(outData)
+			sm.newEXECdInstruction = true
+		default:
+			return ErrSMOutInvalidDestination
+		}
+		if sm.autopull && sm.outputShiftRegisterCounter >= sm.pullThreshold && !sm.fifoTX.IsEmpty() {
+			osr, err := sm.fifoTX.Read()
+			if err != nil {
+				return fmt.Errorf("error reading TX FIFO for post-out autopull: %w", err)
+			}
+			sm.outputShiftRegister = osr
+			sm.outputShiftRegisterCounter = 0
+		}
+	}
+	return nil
 }
 
 func clockDivisorAsQ8(integer uint16, fractional uint8) int32 {
@@ -562,6 +675,11 @@ func (sm *SM) SystemTick() error {
 }
 
 func (sm *SM) Tick() error {
+	if !sm.newEXECdInstruction && sm.delays > 0 {
+		sm.delays--
+		return nil
+	}
+
 	if sm.newEXECdInstruction {
 		sm.currentInstruction = sm.execdInstruction
 		sm.newEXECdInstruction = false
@@ -577,15 +695,16 @@ func (sm *SM) Tick() error {
 		return fmt.Errorf("error decoding: %w", err)
 	}
 
-	if sm.currentInstructionType != SMInstructionOut && sm.autopull {
-		err = sm.AutoPull()
+	if sm.currentInstructionType != SMInstructionOut && sm.autopull && sm.outputShiftRegisterCounter >= sm.pullThreshold && !sm.fifoTX.IsEmpty() {
+		osr, err := sm.fifoTX.Read()
 		if err != nil {
-			return fmt.Errorf("error performing autopull: %w", err)
+			return fmt.Errorf("error reading TX FIFO for autopull: %w", err)
 		}
+		sm.outputShiftRegister = osr
+		sm.outputShiftRegisterCounter = 0
 	}
 
 	sm.jumped = false
-
 	err = sm.Execute()
 	if err != nil {
 		return fmt.Errorf("error executing an instruction: %w", err)
@@ -597,6 +716,52 @@ func (sm *SM) Tick() error {
 		} else {
 			sm.programCounter = (sm.programCounter + 1) % 32
 		}
+	}
+
+	var doSideSet bool = sm.sidesetBitCount > 0
+	if doSideSet && sm.sidesetIsOptional {
+		doSideSet = ((sm.currentInstruction >> 12) & 0b1) == 1
+	}
+	if doSideSet {
+		bits := sm.sidesetBitCount
+		if sm.sidesetIsOptional {
+			bits -= 1
+		}
+		var i uint
+		for i = 0; i < bits; i++ {
+			bitIndex := (13 - sm.sidesetBitCount) + i
+			bit := ((sm.currentInstruction >> bitIndex) & 0b1) == 1
+			if sm.sidesetControlsPinDirection {
+				var outputEnable PinOutputEnable
+				if bit == true {
+					outputEnable = PinOutputEnabled
+				} else if bit == false {
+					outputEnable = PinOutputNotEnabled
+				}
+				pinNumber := sm.sidesetBase + i
+				err := sm.pins.SetOutputEnable(pinNumber, outputEnable)
+				if err != nil {
+					return fmt.Errorf("error sideset-ing pin %d's output enable: %w", pinNumber, err)
+				}
+			} else {
+				var output PinOutput
+				if bit == true {
+					output = PinOutputHigh
+				} else if bit == false {
+					output = PinOutputLow
+				}
+				pinNumber := sm.sidesetBase + i
+				err := sm.pins.SetOutput(pinNumber, output)
+				if err != nil {
+					return fmt.Errorf("error sideset-ing pin %d's output: %w", pinNumber, err)
+				}
+			}
+		}
+	}
+	var doDelays bool = sm.sidesetBitCount < 5
+	if doDelays {
+		var delayMask uint = (1 << (5 - sm.sidesetBitCount)) - 1
+		sm.delays = (uint)(sm.currentInstruction>>8) & delayMask
 	}
 
 	return nil
