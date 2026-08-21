@@ -3,46 +3,25 @@ package pio
 import (
 	"errors"
 	"fmt"
-	"math"
 )
 
-type StatusSelection uint
-type ShiftDirection uint
-type SMInstructionType uint
-
-const (
-	// If TX FIFO level is < statusComparisonLevel, returns all '1's.
-	StatusSelectionTXLevel StatusSelection = iota
-	// If RX FIFO level is < statusComparisonLevel, returns all '1's.
-	StatusSelectionRXLevel
-
-	ShiftDirectionRight ShiftDirection = iota
-	ShiftDirectionLeft
-
-	SMInstructionJump     SMInstructionType = 0b000
-	SMInstructionWait     SMInstructionType = 0b001
-	SMInstructionIn       SMInstructionType = 0b010
-	SMInstructionOut      SMInstructionType = 0b011
-	SMInstructionPushPull SMInstructionType = 0b100
-	SMInstructionMove     SMInstructionType = 0b101
-	SMInstructionIRQ      SMInstructionType = 0b110
-	SMInstructionSet      SMInstructionType = 0b111
-)
-
-type StickyWriteRecord struct {
-	pin          uint
-	output       *PinOutput
-	outputEnable *PinOutputEnable
-}
-
-type SM struct {
+type sm struct {
 	id uint
 
-	instructionMemory InstructionMemoryReader
-	fifoRX            *FIFO
-	fifoTX            *FIFO
-	pins              PinsSMs
-	irqs              IRQSMs
+	im        *im
+	fifoRX    *fifo
+	fifoTX    *fifo
+	pinInputs uint32
+	irqInputs uint8
+
+	enabled bool
+
+	pinOutputs           uint32
+	pinOutputMask        uint32
+	pinOutputEnables     uint32
+	pinOutputEnablesMask uint32
+	irqWrites            uint8
+	irqWritesMask        uint8
 
 	// Use the most significant bit of the delay/side-set field in each instruction as a 'side set enable' bit.
 	// This allows instructions to perform side-set optionally, rather than on every instruction.
@@ -62,7 +41,8 @@ type SM struct {
 	// The address the programCounter is set to after reaching wrapFromAddress.
 	wrapToAddress uint
 	// Select which FIFO is used for the 'MOV x, STATUS' instruction.
-	statusSelection StatusSelection
+	// If the level of the selected FIFO is < statusComparisonLevel, 'MOV x, STATUS' returns all '1's.
+	statusSelectionUsesRX bool
 	// Choose a level which the selected FIFO's level will be compared to.
 	statusComparisonLevel uint
 	// Number of bits shifted out of the outputShiftRegister before an autopull (or pull ifempty) will happen.
@@ -72,9 +52,9 @@ type SM struct {
 	// Can be a value of 1-32.
 	pushThreshold uint
 	// Direction the outputShiftRegister is shifted in as data is taken out.
-	outShiftdir ShiftDirection
+	outShiftDirectionRight bool
 	// Direction the inputShiftRegister is shifted in as data is put in.
-	inShiftdir ShiftDirection
+	inShiftDirectionRight bool
 	// Perform a pull automatically when the outputShiftRegister is emptied (eg on/following an OUT which causes the outputShiftRegisterCounter to be >= pullThreshold)
 	autopull bool
 	// Perform a push automatically when the inputShiftRegister is filled (eg on an IN which causes the inputShiftRegisterCounter to be >= pushThreshold)
@@ -100,13 +80,6 @@ type SM struct {
 	// The pin used for the JMP PIN instruction.
 	jumpPin uint
 
-	// Clock divider integer component
-	clockDividerInteger uint16
-	// Clock divider fractional component
-	clockDividerFractional uint8
-	// Internal clock accumulator
-	clockAccumulator int32
-
 	// Current instruction address.
 	programCounter uint
 	// Currently executing instruction.
@@ -126,9 +99,6 @@ type SM struct {
 	// The amount of cycles of delay left to be completed.
 	delays uint
 
-	// The type of the instruction that is stored in currentInstruction.
-	currentInstructionType SMInstructionType
-
 	outputShiftRegister        uint32
 	outputShiftRegisterCounter uint
 	inputShiftRegister         uint32
@@ -136,114 +106,177 @@ type SM struct {
 	x                          uint32
 	y                          uint32
 
-	stickyWriteRecords []StickyWriteRecord
+	// The integer component of the clock divisor.
+	clockDivisorInteger uint16
+	// The fractional component of the clock divisor, as a number of 256ths to be added to the integer component.
+	clockDivisorFractional uint8
+
+	// A computed number of system clock ticks remaining until the next divided tick.
+	clockDividerTicksRemaining uint
+	// An accumulated count of 256ths used to approximate a fractional divide of the system clock.
+	// Every time this accumulator wraps, the next divided tick is delayed by +1 clock cycle.
+	clockDividerFractionAccumulator uint8
 }
 
-func NewSM(id uint, instructionMemory InstructionMemoryReader, pins PinsSMs, irqs IRQSMs) *SM {
-	return &SM{
+func newSM(id uint, im *im) *sm {
+	return &sm{
 		id: id,
 
-		instructionMemory: instructionMemory,
-		fifoRX:            NewFIFO(4),
-		fifoTX:            NewFIFO(4),
-		pins:              pins,
-		irqs:              irqs,
+		im:     im,
+		fifoRX: newFIFO(4),
+		fifoTX: newFIFO(4),
 
 		wrapFromAddress:            31,
 		setCount:                   5,
-		clockAccumulator:           clockDivisorAsQ8(0, 0),
 		outputShiftRegisterCounter: 32,
+		outShiftDirectionRight:     true,
+		inShiftDirectionRight:      true,
+
+		clockDivisorInteger: 1,
 	}
 }
 
-var ErrSMClockDivisorOutOfRange = errors.New("clock divisor out of range")
+var ErrInvalidClockDivider = errors.New("invalid clock divider")
 
-func (sm *SM) SetClockDivisor(divisor float64) error {
-	if divisor < 1.0 || divisor > 65536.0 {
-		return ErrSMClockDivisorOutOfRange
+func (sm *sm) setClockDivider(divider float32) error {
+	if divider < 1 || divider > 65536 {
+		return ErrInvalidClockDivider
 	}
-	q8 := math.Round(divisor * 256)
-	integer := uint32(q8) >> 8
-	fractional := uint8(uint32(q8) & 0xFF)
-	if integer == 65536 {
-		integer = 0
-		fractional = 0
+	if divider == 65536 {
+		sm.clockDivisorInteger = 0
+		sm.clockDivisorFractional = 0
+	} else {
+		sm.clockDivisorInteger = uint16(divider)
+		sm.clockDivisorFractional = uint8((divider - float32(sm.clockDivisorInteger)) * 256)
 	}
-	sm.clockDividerInteger = uint16(integer)
-	sm.clockDividerFractional = fractional
 	return nil
 }
 
-type FIFOJoinMode uint
+func (sm *sm) tick() error {
+	if !sm.stickyOutSetAssertion {
+		sm.pinOutputs = 0
+		sm.pinOutputMask = 0
+		sm.pinOutputEnables = 0
+		sm.pinOutputEnablesMask = 0
+	}
+	sm.irqWrites = 0
+	sm.irqWritesMask = 0
+
+	if sm.newForcedInstruction {
+		sm.currentInstruction = sm.forcedInstruction
+		err := sm.execute()
+		if err != nil {
+			return fmt.Errorf("error executing forced instruction: %w", err)
+		}
+		sm.newForcedInstruction = sm.stalled
+	} else if sm.clockDividerTicksRemaining == 0 {
+		sm.dividedTick()
+	}
+
+	if sm.clockDividerTicksRemaining == 0 {
+		actualIntegerDivisor := uint(sm.clockDivisorInteger)
+		// clockDivisorInteger as 0 actually represents a divisor of 65536, as dividing by 0 is not a useful operation.
+		if actualIntegerDivisor == 0 {
+			actualIntegerDivisor = 65536
+		}
+
+		// Setup the amount of ticks to count until the next divided tick based on the integer divisor.
+		sm.clockDividerTicksRemaining = actualIntegerDivisor
+
+		// Now, use the fractionAccumulator to determine whether to delay the next divided clock tick by an additional clock cycle.
+		// Importantly, clockDividerFractionAccumulator is a uint8, so automatically wraps around every 256.
+		// As the clockDivisorFractional represents a number of 256ths, this makes calculations very easy.
+		previousAccumulatorValue := sm.clockDividerFractionAccumulator
+		sm.clockDividerFractionAccumulator += sm.clockDivisorFractional
+		// If adding the clockDivisorFractional has caused the fraction accumulator to wrap,
+		// delay the next divided clock tick by an additional clock cycle.
+		if sm.clockDividerFractionAccumulator < previousAccumulatorValue {
+			sm.clockDividerTicksRemaining++
+		}
+	}
+
+	// Count down a cycle.
+	sm.clockDividerTicksRemaining--
+
+	return nil
+}
+
+func (sm *sm) dividedTick() error {
+	if sm.newEXECdInstruction {
+		sm.currentInstruction = sm.execdInstruction
+		err := sm.execute()
+		if err != nil {
+			return fmt.Errorf("error executing EXEC'd instruction: %w", err)
+		}
+		sm.newEXECdInstruction = sm.stalled
+	} else if sm.delays > 0 {
+		sm.delays--
+	} else if sm.stalled {
+		err := sm.execute()
+		if err != nil {
+			return fmt.Errorf("error executing stalled instruction: %w", err)
+		}
+		if !sm.jumped && !sm.stalled {
+			sm.incrementProgramCounter()
+		}
+	} else {
+		err := sm.fetch()
+		if err != nil {
+			return fmt.Errorf("error fetching instruction: %w", err)
+		}
+		err = sm.execute()
+		if err != nil {
+			return fmt.Errorf("error executing instruction: %w", err)
+		}
+		if !sm.jumped && !sm.stalled {
+			sm.incrementProgramCounter()
+		}
+	}
+	return nil
+}
+
+func (sm *sm) fetch() error {
+	return nil
+}
+
+type instruction uint
 
 const (
-	FIFOJoinNone FIFOJoinMode = iota
-	FIFOJoinRX
-	FIFOJoinTX
+	instructionJump     instruction = 0b000
+	instructionWait     instruction = 0b001
+	instructionIn       instruction = 0b010
+	instructionOut      instruction = 0b011
+	instructionPushPull instruction = 0b100
+	instructionMove     instruction = 0b101
+	instructionIRQ      instruction = 0b110
+	instructionSet      instruction = 0b111
 )
-
-var ErrSMInvalidFIFOJoinMode = errors.New("invalid fifo join mode")
-
-func (sm *SM) SetFIFOJoinMode(joinMode FIFOJoinMode) error {
-	switch joinMode {
-	case FIFOJoinNone:
-		sm.fifoRX = NewFIFO(4)
-		sm.fifoTX = NewFIFO(4)
-	case FIFOJoinRX:
-		sm.fifoRX = NewFIFO(8)
-		sm.fifoTX = NewFIFO(0)
-	case FIFOJoinTX:
-		sm.fifoRX = NewFIFO(0)
-		sm.fifoTX = NewFIFO(8)
-	default:
-		return ErrSMInvalidFIFOJoinMode
-	}
-	return nil
-}
-
-func (sm *SM) ScheduleForcedInstruction(instruction uint16) error {
-	sm.forcedInstruction = instruction
-	sm.newForcedInstruction = true
-	return nil
-}
-
-func (sm *SM) Fetch() error {
-	var err error
-	sm.currentInstruction, err = sm.instructionMemory.Read(sm.programCounter)
-	if err != nil {
-		return fmt.Errorf("error reading instruction from address %d: %w", sm.programCounter, err)
-	}
-	return nil
-}
-
-func (sm *SM) Decode() error {
-	sm.currentInstructionType = (SMInstructionType)(sm.currentInstruction>>13) & 0b111
-	return nil
-}
 
 var ErrSMInvalidInstructionType = errors.New("invalid instruction type")
 
-func (sm *SM) Execute() error {
-	instr := sm.currentInstruction
-	switch sm.currentInstructionType {
-	case SMInstructionJump:
-		condition := (JumpCondition)(instr>>5) & 0b111
-		address := (uint)(instr) & 0b11111
+func (sm *sm) execute() error {
+	instructionType := instruction((sm.currentInstruction >> 13) & 0b111)
+	sm.jumped = false
+
+	switch instructionType {
+	case instructionJump:
+		condition := JumpCondition((sm.currentInstruction >> 5) & 0b111)
+		address := uint(sm.currentInstruction & 0b11111)
 		err := sm.ExecuteJump(condition, address)
 		if err != nil {
 			return fmt.Errorf("error excecuting jump: %w", err)
 		}
-	case SMInstructionWait:
-		polarity := ((instr >> 7) & 0b1) == 1
-		source := (WaitSource)(instr>>5) & 0b11
-		index := (uint)(instr) & 0b11111
+	case instructionWait:
+		polarity := (sm.currentInstruction>>7)&0b1 == 1
+		source := WaitSource((sm.currentInstruction >> 5) & 0b11)
+		index := uint(sm.currentInstruction & 0b11111)
 		err := sm.ExecuteWait(polarity, source, index)
 		if err != nil {
 			return fmt.Errorf("error excecuting wait: %w", err)
 		}
-	case SMInstructionIn:
-		source := (InSource)(instr>>5) & 0b111
-		numberOfBits := (uint)(instr & 0b11111)
+	case instructionIn:
+		source := InSource((sm.currentInstruction >> 5) & 0b111)
+		numberOfBits := uint(sm.currentInstruction & 0b11111)
 		if numberOfBits == 0 {
 			numberOfBits = 32
 		}
@@ -251,9 +284,9 @@ func (sm *SM) Execute() error {
 		if err != nil {
 			return fmt.Errorf("error excecuting in: %w", err)
 		}
-	case SMInstructionOut:
-		destination := (OutDestination)(instr>>5) & 0b111
-		numberOfBits := (uint)(instr & 0b11111)
+	case instructionOut:
+		destination := OutDestination((sm.currentInstruction >> 5) & 0b111)
+		numberOfBits := uint(sm.currentInstruction & 0b11111)
 		if numberOfBits == 0 {
 			numberOfBits = 32
 		}
@@ -261,25 +294,29 @@ func (sm *SM) Execute() error {
 		if err != nil {
 			return fmt.Errorf("error excecuting out: %w", err)
 		}
-	case SMInstructionPushPull:
-		err := sm.ExecutePushOrPull()
+	case instructionPushPull:
+		isPull := (sm.currentInstruction>>7)&0b1 == 1
+		ifFull := (sm.currentInstruction>>6)&0b1 == 1
+		block := (sm.currentInstruction>>5)&0b1 == 1
+		err := sm.ExecutePushOrPull(isPull, ifFull, block)
 		if err != nil {
 			return fmt.Errorf("error excecuting push/pull: %w", err)
 		}
-	case SMInstructionMove:
+	case instructionMove:
 
 		// remember, MOV PINS also affected by inlineOutWriteEnable
+		// the modified value of the MOV is used to determine inlineOutWriteEnable
 
 		err := sm.ExecuteMove()
 		if err != nil {
 			return fmt.Errorf("error excecuting move: %w", err)
 		}
-	case SMInstructionIRQ:
+	case instructionIRQ:
 		err := sm.ExecuteIRQ()
 		if err != nil {
 			return fmt.Errorf("error excecuting irq: %w", err)
 		}
-	case SMInstructionSet:
+	case instructionSet:
 		err := sm.ExecuteSet()
 		if err != nil {
 			return fmt.Errorf("error excecuting set: %w", err)
@@ -287,7 +324,27 @@ func (sm *SM) Execute() error {
 	default:
 		return ErrSMInvalidInstructionType
 	}
+
+	if sm.autopull && sm.outputShiftRegisterCounter >= sm.pullThreshold && !sm.fifoTX.isEmpty() {
+		osr, err := sm.fifoTX.read()
+		if err != nil {
+			return fmt.Errorf("error reading TX FIFO for autopull: %w", err)
+		}
+		sm.outputShiftRegister = osr
+		sm.outputShiftRegisterCounter = 0
+	}
+
+	// TODO: implement side-set and delay.
+
 	return nil
+}
+
+func (sm *sm) incrementProgramCounter() {
+	if sm.programCounter == sm.wrapFromAddress {
+		sm.programCounter = sm.wrapToAddress
+	} else {
+		sm.programCounter = (sm.programCounter + 1) % 32
+	}
 }
 
 type JumpCondition uint
@@ -303,9 +360,9 @@ const (
 	JumpOSRENotEmpty          JumpCondition = 0b111
 )
 
-var ErrSMJumpInvalidCondition = errors.New("invalid jump condition")
+var ErrSMJumpInvalidCondition = errors.New("invalid condition")
 
-func (sm *SM) ExecuteJump(condition JumpCondition, address uint) error {
+func (sm *sm) ExecuteJump(condition JumpCondition, address uint) error {
 	var shouldJump bool
 	switch condition {
 	case JumpAlways:
@@ -323,11 +380,7 @@ func (sm *SM) ExecuteJump(condition JumpCondition, address uint) error {
 	case JumpXNotEqualY:
 		shouldJump = (sm.x != sm.y)
 	case JumpPin:
-		input, err := sm.pins.GetInput(sm.jumpPin)
-		if err != nil {
-			return fmt.Errorf("error getting input of pin %d: %w", sm.jumpPin, err)
-		}
-		shouldJump = (input == PinInputHigh)
+		shouldJump = (sm.pinInputs>>sm.jumpPin)&0b1 == 1
 	case JumpOSRENotEmpty:
 		shouldJump = (sm.outputShiftRegisterCounter < sm.pullThreshold)
 	default:
@@ -348,54 +401,28 @@ const (
 	WaitSourceIRQ  WaitSource = 0b10
 )
 
-var ErrSMWaitInvalidSource = errors.New("inavlid wait source")
+var ErrSMWaitInvalidSource = errors.New("invalid source")
 
-func (sm *SM) ExecuteWait(polarity bool, source WaitSource, index uint) error {
+func (sm *sm) ExecuteWait(polarity bool, source WaitSource, index uint) error {
 	switch source {
 	case WaitSourceGPIO:
-		gpioInput, err := sm.pins.GetInput(index)
-		if err != nil {
-			return fmt.Errorf("error getting input of pin %d: %w", index, err)
-		}
-		if polarity == true {
-			sm.stalled = !(gpioInput == PinInputHigh)
-		} else if polarity == false {
-			sm.stalled = !(gpioInput == PinInputLow)
-		}
+		sm.stalled = ((sm.pinInputs>>index)&0b1 == 1) == polarity
 	case WaitSourcePin:
-		pinIndex := (sm.inBase + index) % 32
-		pinInput, err := sm.pins.GetInput(pinIndex)
-		if err != nil {
-			return fmt.Errorf("error getting input of pin %d: %w", pinIndex, err)
-		}
-		if polarity == true {
-			sm.stalled = !(pinInput == PinInputHigh)
-		} else if polarity == false {
-			sm.stalled = !(pinInput == PinInputLow)
-		}
+		pin := (sm.inBase + index) % 32
+		sm.stalled = ((sm.pinInputs>>pin)&0b1 == 1) == polarity
 	case WaitSourceIRQ:
-		var relative bool = ((index >> 4) & 0b1) == 1
-		var irqIndex uint = index & 0b111
+		relative := (index>>4)&0b1 == 1
+		irq := index
 		if relative {
-			var upperBit uint = irqIndex & 0b100
-			var lowerBits uint = irqIndex & 0b11
-			lowerBits = (lowerBits + sm.id) & 0b11
-			irqIndex = upperBit | lowerBits
+			upperBit := irq & 0b100
+			lowerBits := (irq + sm.id) & 0b011
+			irq = upperBit | lowerBits
 		}
-		irqState, err := sm.irqs.Read(irqIndex)
-		if err != nil {
-			return fmt.Errorf("error reading state of irq %d: %w", irqIndex, err)
-		}
-		if polarity == true {
-			sm.stalled = !(irqState == IRQSet)
-			if !sm.stalled {
-				err := sm.irqs.Clear(irqIndex)
-				if err != nil {
-					return fmt.Errorf("error clearing irq %d: %w", irqIndex, err)
-				}
-			}
-		} else if polarity == false {
-			sm.stalled = !(irqState == IRQCleared)
+		sm.stalled = ((sm.irqInputs>>irq)&0b1 == 1) == polarity
+		if polarity == true && !sm.stalled {
+			var clearIRQMask uint8 = (0b1 << irq)
+			sm.irqWrites &= ^clearIRQMask
+			sm.irqWritesMask |= clearIRQMask
 		}
 	default:
 		return ErrSMWaitInvalidSource
@@ -414,85 +441,47 @@ const (
 	InSourceOSR  InSource = 0b111
 )
 
-var ErrSMInvalidShiftDirection = errors.New("invalid shift direction")
+var ErrSMInInvalidSource = errors.New("invalid source")
 
-var ErrSMInInvalidSource = errors.New("invalid in source")
-var ErrSMInInvalidPinState = errors.New("invalid pin state")
-
-func (sm *SM) ExecuteIn(source InSource, bits uint) error {
+func (sm *sm) ExecuteIn(source InSource, bits uint) error {
 	if !sm.stalled {
-		var inData uint32
-		var i uint
+		var data uint32
+		var mask uint32 = (0b1 << bits) - 1
 		switch source {
 		case InSourcePins:
-			for i = 0; i < bits; i++ {
-				pinNumber := (sm.inBase + i) % 32
-				pinState, err := sm.pins.GetInput(pinNumber)
-				if err != nil {
-					return fmt.Errorf("error getting input to pin %d: %w", pinNumber, err)
-				}
-				switch pinState {
-				case PinInputHigh:
-					inData = (inData << 1) | 0b1
-				case PinInputLow:
-					inData = (inData << 1) | 0b0
-				default:
-					return ErrSMInInvalidPinState
-				}
-			}
+			data = (sm.pinInputs & (mask << sm.inBase)) >> sm.inBase
 		case InSourceX:
-			for i = 0; i < bits; i++ {
-				bit := ((sm.x >> i) & 0b1)
-				inData = (inData << 1) | bit
-			}
+			data = (sm.x & mask)
 		case InSourceY:
-			for i = 0; i < bits; i++ {
-				bit := ((sm.y >> i) & 0b1)
-				inData = (inData << 1) | bit
-			}
+			data = (sm.y & mask)
 		case InSourceNull:
-			// Data is all zeros, no action needed.
+			data = 0
 		case InSourceISR:
-			for i = 0; i < bits; i++ {
-				bit := ((sm.inputShiftRegister >> i) & 0b1)
-				inData = (inData << 1) | bit
-			}
+			data = (sm.inputShiftRegister & mask)
 		case InSourceOSR:
-			for i = 0; i < bits; i++ {
-				bit := ((sm.outputShiftRegister >> i) & 0b1)
-				inData = (inData << 1) | bit
-			}
+			data = (sm.outputShiftRegister & mask)
 		default:
 			return ErrSMInInvalidSource
 		}
-		switch sm.inShiftdir {
-		case ShiftDirectionLeft:
-			for i = 0; i < bits; i++ {
-				bit := (inData >> i) & 0b1
-				sm.inputShiftRegister = (sm.inputShiftRegister << 1) | bit
-			}
-		case ShiftDirectionRight:
-			for i = 0; i < bits; i++ {
-				bit := (inData >> (bits - (i + 1))) & 0b1
-				rightAlignedBit := (bit << 31)
-				sm.inputShiftRegister = (sm.inputShiftRegister >> 1) | rightAlignedBit
-			}
-		default:
-			return ErrSMInvalidShiftDirection
+		if sm.inShiftDirectionRight {
+			sm.inputShiftRegister >>= bits
+			sm.inputShiftRegister |= (data << (32 - bits))
+		} else {
+			sm.inputShiftRegister <<= bits
+			sm.inputShiftRegister |= data
 		}
 		sm.inputShiftRegisterCounter += bits
 	}
 	sm.stalled = false
 	if sm.autopush && sm.inputShiftRegisterCounter >= sm.pushThreshold {
-		if !sm.fifoRX.IsFull() {
-			err := sm.fifoRX.Write(sm.inputShiftRegister)
+		sm.stalled = sm.fifoTX.isFull()
+		if !sm.stalled {
+			err := sm.fifoTX.write(sm.inputShiftRegister)
 			if err != nil {
 				return fmt.Errorf("error writing RX FIFO for autopush: %w", err)
 			}
 			sm.inputShiftRegister = 0
 			sm.inputShiftRegisterCounter = 0
-		} else {
-			sm.stalled = true
 		}
 	}
 	return nil
@@ -513,256 +502,80 @@ const (
 
 var ErrSMOutInvalidDestination = errors.New("invalid out destination")
 
-func (sm *SM) ExecuteOut(destination OutDestination, bits uint) error {
+func (sm *sm) ExecuteOut(destination OutDestination, bits uint) error {
+	alreadyStalled := sm.stalled
 	sm.stalled = false
-	if sm.autopull && sm.outputShiftRegisterCounter >= sm.pullThreshold {
-		if !sm.fifoTX.IsEmpty() {
-			osr, err := sm.fifoTX.Read()
+	if sm.autopull && sm.outputShiftRegisterCounter >= sm.pushThreshold {
+		if !sm.fifoRX.isEmpty() {
+			osr, err := sm.fifoTX.read()
 			if err != nil {
-				return fmt.Errorf("error reading TX FIFO for pre-out autopull: %w", err)
+				return fmt.Errorf("error reading TX fifo for autopull: %w", err)
 			}
 			sm.outputShiftRegister = osr
 			sm.outputShiftRegisterCounter = 0
-		} else {
+		}
+		if !alreadyStalled {
 			sm.stalled = true
+		} else if !sm.fifoRX.isEmpty() {
+			sm.stalled = false
 		}
-	} else {
-		var outData uint32
-		var i uint
-		switch sm.outShiftdir {
-		case ShiftDirectionLeft:
-			for i = 0; i < bits; i++ {
-				bit := ((sm.outputShiftRegister << i) & 0b10000000000000000000000000000000) >> 31
-				outData = (outData << 1) | bit
-			}
-			sm.outputShiftRegister = (sm.outputShiftRegister << bits)
-		case ShiftDirectionRight:
-			for i = 0; i < bits; i++ {
-				bit := (sm.outputShiftRegister >> (bits - (i + 1))) & 0b1
-				outData = (outData << 1) | bit
-			}
-			sm.outputShiftRegister = (sm.outputShiftRegister >> bits)
-		default:
-			return ErrSMInvalidShiftDirection
-		}
-		sm.outputShiftRegisterCounter += bits
-
-		var doWrite bool = true
-		if sm.inlineOutWriteEnableIsUsed {
-			doWrite = ((outData >> sm.inlineOutWriteEnableBit) & 0b1) == 1
-		}
-
-		sm.stickyWriteRecords = []StickyWriteRecord{}
-
-		switch destination {
-		case OutDestinationPins:
-			if doWrite {
-				for i = 0; i < sm.outCount; i++ {
-					pinNumber := (sm.outBase + i) % 32
-					bit := (((outData >> i) & 0b1) == 1)
-					var err error
-					var output PinOutput
-					if bit == true {
-						output = PinOutputHigh
-					} else if bit == false {
-						output = PinOutputLow
-					}
-					err = sm.pins.SetOutput(pinNumber, output)
-					if err != nil {
-						return fmt.Errorf("error setting pin %d's output: %w", pinNumber, err)
-					}
-					sm.stickyWriteRecords = append(sm.stickyWriteRecords, StickyWriteRecord{
-						pin:    pinNumber,
-						output: &output,
-					})
-				}
-			}
-		case OutDestinationX:
-			sm.x = outData
-		case OutDestinationY:
-			sm.y = outData
-		case OutDestinationNull:
-			// No action required, discards data.
-		case OutDestinationPinDirections:
-			if doWrite {
-				for i = 0; i < sm.outCount; i++ {
-					pinNumber := (sm.outBase + i) % 32
-					bit := (((outData >> i) & 0b1) == 1)
-					var err error
-					var outputEnable PinOutputEnable
-					if bit == true {
-						outputEnable = PinOutputEnabled
-					} else if bit == false {
-						outputEnable = PinOutputNotEnabled
-					}
-					err = sm.pins.SetOutputEnable(pinNumber, outputEnable)
-					if err != nil {
-						return fmt.Errorf("error setting pin %d's output enable: %w", pinNumber, err)
-					}
-					sm.stickyWriteRecords = append(sm.stickyWriteRecords, StickyWriteRecord{
-						pin:          pinNumber,
-						outputEnable: &outputEnable,
-					})
-				}
-			}
-		case OutDestinationProgramCounter:
-			sm.programCounter = (uint)(outData % 32)
-			sm.jumped = true
-		case OutDestinationInputShiftRegister:
-			sm.inputShiftRegister = outData
-			sm.inputShiftRegisterCounter = bits
-		case OutDestinationEXEC:
-			sm.execdInstruction = (uint16)(outData)
-			sm.newEXECdInstruction = true
-		default:
-			return ErrSMOutInvalidDestination
-		}
-		if sm.autopull && sm.outputShiftRegisterCounter >= sm.pullThreshold && !sm.fifoTX.IsEmpty() {
-			osr, err := sm.fifoTX.Read()
-			if err != nil {
-				return fmt.Errorf("error reading TX FIFO for post-out autopull: %w", err)
-			}
-			sm.outputShiftRegister = osr
-			sm.outputShiftRegisterCounter = 0
-		}
-	}
-	return nil
-}
-
-func clockDivisorAsQ8(integer uint16, fractional uint8) int32 {
-	intPart := int32(integer)
-	if intPart == 0 {
-		intPart = 65536
-	}
-	return (intPart << 8) | int32(fractional)
-}
-
-func (sm *SM) SystemTick() error {
-	sm.clockAccumulator -= 1 << 8
-	if sm.stickyOutSetAssertion {
-		for i, record := range sm.stickyWriteRecords {
-			if record.output != nil {
-				err := sm.pins.SetOutput(record.pin, *record.output)
-				if err != nil {
-					return fmt.Errorf("error applying sticky pin write %d for pin %d's output: %w", i, record.pin, err)
-				}
-			}
-			if record.outputEnable != nil {
-				err := sm.pins.SetOutputEnable(record.pin, *record.outputEnable)
-				if err != nil {
-					return fmt.Errorf("error applying sticky pin write %d for pin %d's output enable: %w", i, record.pin, err)
-				}
-			}
-		}
-	}
-	if sm.newForcedInstruction {
-		sm.currentInstruction = sm.forcedInstruction
-		err := sm.Execute()
-		if err != nil {
-			return fmt.Errorf("error executing forced instruction: %w", err)
-		}
-		if !sm.stalled {
-			sm.newForcedInstruction = false
-		}
-	} else if sm.clockAccumulator <= 0 {
-		sm.clockAccumulator += clockDivisorAsQ8(sm.clockDividerInteger, sm.clockDividerFractional)
-		err := sm.Tick()
-		if err != nil {
-			return fmt.Errorf("error performing tick: %w", err)
-		}
-	}
-	return nil
-}
-
-func (sm *SM) Tick() error {
-	if !sm.newEXECdInstruction && sm.delays > 0 {
-		sm.delays--
 		return nil
 	}
 
-	if sm.newEXECdInstruction {
-		sm.currentInstruction = sm.execdInstruction
-		sm.newEXECdInstruction = false
-	} else if !sm.stalled {
-		err := sm.Fetch()
-		if err != nil {
-			return fmt.Errorf("error fetching: %w", err)
+	var data uint32
+	var mask uint32 = (0b1 << bits) - 1
+	if sm.outShiftDirectionRight {
+		data = sm.outputShiftRegister & mask
+		sm.outputShiftRegister >>= bits
+	} else {
+		data = (sm.outputShiftRegister >> (32 - bits))
+		sm.outputShiftRegister <<= bits
+	}
+	sm.outputShiftRegisterCounter += bits
+
+	writePins := true
+	if sm.inlineOutWriteEnableIsUsed {
+		writePins = ((data >> sm.inlineOutWriteEnableBit) & 0b1) == 1
+	}
+
+	var pinData uint32 = (data << sm.outBase)
+	var pinMask uint32 = ((0b1 << sm.outCount) - 1) << sm.outBase
+
+	switch destination {
+	case OutDestinationPins:
+		if writePins {
+			sm.pinOutputs &= ^pinMask
+			sm.pinOutputs |= pinData
+			sm.pinOutputMask |= pinMask
 		}
-	}
-
-	err := sm.Decode()
-	if err != nil {
-		return fmt.Errorf("error decoding: %w", err)
-	}
-
-	if sm.currentInstructionType != SMInstructionOut && sm.autopull && sm.outputShiftRegisterCounter >= sm.pullThreshold && !sm.fifoTX.IsEmpty() {
-		osr, err := sm.fifoTX.Read()
-		if err != nil {
-			return fmt.Errorf("error reading TX FIFO for autopull: %w", err)
+	case OutDestinationX:
+		sm.x = data
+	case OutDestinationY:
+		sm.y = data
+	case OutDestinationNull:
+		// discards data
+	case OutDestinationPinDirections:
+		if writePins {
+			sm.pinOutputEnables &= ^pinMask
+			sm.pinOutputEnables |= pinData
+			sm.pinOutputEnablesMask |= pinMask
 		}
-		sm.outputShiftRegister = osr
-		sm.outputShiftRegisterCounter = 0
+	case OutDestinationProgramCounter:
+		sm.programCounter = uint(data % 32)
+		sm.jumped = true
+	case OutDestinationInputShiftRegister:
+		sm.inputShiftRegister = data
+		sm.inputShiftRegisterCounter = bits
+	case OutDestinationEXEC:
+		sm.execdInstruction = uint16(data)
+		sm.newEXECdInstruction = true
+	default:
+		return ErrSMOutInvalidDestination
 	}
 
-	sm.jumped = false
-	err = sm.Execute()
-	if err != nil {
-		return fmt.Errorf("error executing an instruction: %w", err)
-	}
+	return nil
+}
 
-	if !sm.stalled && !sm.newEXECdInstruction && !sm.jumped {
-		if sm.programCounter == sm.wrapFromAddress {
-			sm.programCounter = sm.wrapToAddress
-		} else {
-			sm.programCounter = (sm.programCounter + 1) % 32
-		}
-	}
-
-	var doSideSet bool = sm.sidesetBitCount > 0
-	if doSideSet && sm.sidesetIsOptional {
-		doSideSet = ((sm.currentInstruction >> 12) & 0b1) == 1
-	}
-	if doSideSet {
-		bits := sm.sidesetBitCount
-		if sm.sidesetIsOptional {
-			bits -= 1
-		}
-		var i uint
-		for i = 0; i < bits; i++ {
-			bitIndex := (13 - sm.sidesetBitCount) + i
-			bit := ((sm.currentInstruction >> bitIndex) & 0b1) == 1
-			if sm.sidesetControlsPinDirection {
-				var outputEnable PinOutputEnable
-				if bit == true {
-					outputEnable = PinOutputEnabled
-				} else if bit == false {
-					outputEnable = PinOutputNotEnabled
-				}
-				pinNumber := sm.sidesetBase + i
-				err := sm.pins.SetOutputEnable(pinNumber, outputEnable)
-				if err != nil {
-					return fmt.Errorf("error sideset-ing pin %d's output enable: %w", pinNumber, err)
-				}
-			} else {
-				var output PinOutput
-				if bit == true {
-					output = PinOutputHigh
-				} else if bit == false {
-					output = PinOutputLow
-				}
-				pinNumber := sm.sidesetBase + i
-				err := sm.pins.SetOutput(pinNumber, output)
-				if err != nil {
-					return fmt.Errorf("error sideset-ing pin %d's output: %w", pinNumber, err)
-				}
-			}
-		}
-	}
-	var doDelays bool = sm.sidesetBitCount < 5
-	if doDelays {
-		var delayMask uint = (1 << (5 - sm.sidesetBitCount)) - 1
-		sm.delays = (uint)(sm.currentInstruction>>8) & delayMask
-	}
-
+func (sm *sm) ExecutePushOrPull(isPull bool, ifFull bool, block bool) error {
 	return nil
 }

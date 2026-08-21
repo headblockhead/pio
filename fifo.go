@@ -2,7 +2,7 @@ package pio
 
 import "errors"
 
-type FIFO struct {
+type fifo struct {
 	buf []uint32
 
 	head  uint
@@ -10,15 +10,15 @@ type FIFO struct {
 	level uint
 }
 
-func NewFIFO(size uint) *FIFO {
+func newFIFO(size uint) *fifo {
 	buf := make([]uint32, size)
-	return &FIFO{buf: buf}
+	return &fifo{buf: buf}
 }
 
 var ErrFIFOFull = errors.New("FIFO is full")
 
-func (f *FIFO) Write(value uint32) error {
-	if f.IsFull() {
+func (f *fifo) write(value uint32) error {
+	if f.isFull() {
 		return ErrFIFOFull
 	}
 	f.level++
@@ -29,8 +29,8 @@ func (f *FIFO) Write(value uint32) error {
 
 var ErrFIFOEmpty = errors.New("FIFO is empty")
 
-func (f *FIFO) Read() (value uint32, err error) {
-	if f.IsEmpty() {
+func (f *fifo) read() (value uint32, err error) {
+	if f.isEmpty() {
 		return 0, ErrFIFOEmpty
 	}
 	f.level--
@@ -38,14 +38,14 @@ func (f *FIFO) Read() (value uint32, err error) {
 	return f.buf[f.tail], nil
 }
 
-func (f *FIFO) Size() uint {
+func (f *fifo) size() uint {
 	return (uint)(len(f.buf))
 }
 
-func (f *FIFO) IsFull() bool {
-	return f.level == f.Size()
+func (f *fifo) isFull() bool {
+	return f.level >= f.size()
 }
 
-func (f *FIFO) IsEmpty() bool {
+func (f *fifo) isEmpty() bool {
 	return f.level == 0
 }
