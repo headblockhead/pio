@@ -296,9 +296,9 @@ func (sm *sm) execute() error {
 		}
 	case instructionPushPull:
 		isPull := (sm.currentInstruction>>7)&0b1 == 1
-		ifFull := (sm.currentInstruction>>6)&0b1 == 1
+		ifThreshold := (sm.currentInstruction>>6)&0b1 == 1
 		block := (sm.currentInstruction>>5)&0b1 == 1
-		err := sm.ExecutePushOrPull(isPull, ifFull, block)
+		err := sm.ExecutePushOrPull(isPull, ifThreshold, block)
 		if err != nil {
 			return fmt.Errorf("error excecuting push/pull: %w", err)
 		}
@@ -474,9 +474,9 @@ func (sm *sm) ExecuteIn(source InSource, bits uint) error {
 	}
 	sm.stalled = false
 	if sm.autopush && sm.inputShiftRegisterCounter >= sm.pushThreshold {
-		sm.stalled = sm.fifoTX.isFull()
+		sm.stalled = sm.fifoRX.isFull()
 		if !sm.stalled {
-			err := sm.fifoTX.write(sm.inputShiftRegister)
+			err := sm.fifoRX.write(sm.inputShiftRegister)
 			if err != nil {
 				return fmt.Errorf("error writing RX FIFO for autopush: %w", err)
 			}
@@ -505,8 +505,8 @@ var ErrSMOutInvalidDestination = errors.New("invalid out destination")
 func (sm *sm) ExecuteOut(destination OutDestination, bits uint) error {
 	alreadyStalled := sm.stalled
 	sm.stalled = false
-	if sm.autopull && sm.outputShiftRegisterCounter >= sm.pushThreshold {
-		if !sm.fifoRX.isEmpty() {
+	if sm.autopull && sm.outputShiftRegisterCounter >= sm.pullThreshold {
+		if !sm.fifoTX.isEmpty() {
 			osr, err := sm.fifoTX.read()
 			if err != nil {
 				return fmt.Errorf("error reading TX fifo for autopull: %w", err)
@@ -516,7 +516,7 @@ func (sm *sm) ExecuteOut(destination OutDestination, bits uint) error {
 		}
 		if !alreadyStalled {
 			sm.stalled = true
-		} else if !sm.fifoRX.isEmpty() {
+		} else if !sm.fifoTX.isEmpty() {
 			sm.stalled = false
 		}
 		return nil
@@ -576,6 +576,33 @@ func (sm *sm) ExecuteOut(destination OutDestination, bits uint) error {
 	return nil
 }
 
-func (sm *sm) ExecutePushOrPull(isPull bool, ifFull bool, block bool) error {
+func (sm *sm) ExecutePushOrPull(isPull bool, ifThreshold bool, block bool) error {
+	if isPull {
+		shouldPull := (!ifThreshold && !sm.autopull) || (sm.outputShiftRegisterCounter >= sm.pullThreshold)
+		sm.stalled = block && shouldPull && sm.fifoTX.isEmpty()
+		if shouldPull && !sm.fifoTX.isEmpty() {
+			osr, err := sm.fifoTX.read()
+			if err != nil {
+				return fmt.Errorf("error reading TX fifo for pull: %w", err)
+			}
+			sm.outputShiftRegister = osr
+			sm.outputShiftRegisterCounter = 0
+			sm.stalled = false
+		} else if shouldPull && !block {
+			sm.outputShiftRegister = sm.x
+			sm.outputShiftRegisterCounter = 0
+		}
+	} else {
+		shouldPush := !ifThreshold || (sm.inputShiftRegisterCounter >= sm.pushThreshold)
+		sm.stalled = block && shouldPush && sm.fifoRX.isFull()
+		if shouldPush && !sm.fifoRX.isFull() {
+			err := sm.fifoRX.write(sm.inputShiftRegister)
+			if err != nil {
+				return fmt.Errorf("error writing RX FIFO for autopush: %w", err)
+			}
+			sm.inputShiftRegister = 0
+			sm.inputShiftRegisterCounter = 0
+		}
+	}
 	return nil
 }
