@@ -312,20 +312,20 @@ func (sm *sm) execute() error {
 		// remember, MOV PINS also affected by inlineOutWriteEnable
 		// the modified value of the MOV is used to determine inlineOutWriteEnable
 
-		err := sm.ExecuteMove()
-		if err != nil {
-			return fmt.Errorf("error excecuting move: %w", err)
-		}
+		/* err := sm.ExecuteMove()*/
+		/*if err != nil {*/
+		/*return fmt.Errorf("error excecuting move: %w", err)*/
+		/*}*/
 	case instructionIRQ:
-		err := sm.ExecuteIRQ()
-		if err != nil {
-			return fmt.Errorf("error excecuting irq: %w", err)
-		}
+	/*   err := sm.ExecuteIRQ()*/
+	/*if err != nil {*/
+	/*return fmt.Errorf("error excecuting irq: %w", err)*/
+	/*}*/
 	case instructionSet:
-		err := sm.ExecuteSet()
-		if err != nil {
-			return fmt.Errorf("error excecuting set: %w", err)
-		}
+	/*   err := sm.ExecuteSet()*/
+	/*if err != nil {*/
+	/*return fmt.Errorf("error excecuting set: %w", err)*/
+	/*}*/
 	default:
 		return ErrSMInvalidInstructionType
 	}
