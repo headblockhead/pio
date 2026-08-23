@@ -53,9 +53,15 @@ func TestFIFOFullEmpty(t *testing.T) {
 			if fifo.isFull() {
 				t.Errorf("expected new fifo to not be full")
 			}
-			for range size {
+			for i := range size {
 				if err := fifo.write(0); err != nil {
 					t.Fatalf("unexpected error writing to fifo: %v", err)
+				}
+				if i < size-1 && fifo.isFull() {
+					t.Errorf("expected fifo to be non-full after writing %d values", i+1)
+				}
+				if fifo.isEmpty() {
+					t.Errorf("expected fifo to be non-empty after writing %d values", i+1)
 				}
 			}
 			if fifo.isEmpty() {
