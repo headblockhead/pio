@@ -3,6 +3,7 @@ package pio
 import (
 	"errors"
 	"fmt"
+	"math/bits"
 )
 
 type sm struct {
@@ -20,6 +21,8 @@ type sm struct {
 	pinOutputMask        uint32
 	pinOutputEnables     uint32
 	pinOutputEnablesMask uint32
+	pinSidesets          uint32
+	pinSidesetsMask      uint32
 	irqWrites            uint8
 	irqWritesMask        uint8
 
@@ -153,6 +156,8 @@ func (sm *sm) setClockDivider(divider float32) error {
 }
 
 func (sm *sm) tick() error {
+	sm.pinSidesets = 0
+	sm.pinSidesetsMask = 0
 	if !sm.stickyOutSetAssertion {
 		sm.pinOutputs = 0
 		sm.pinOutputMask = 0
@@ -209,8 +214,6 @@ func (sm *sm) dividedTick() error {
 			return fmt.Errorf("error executing EXEC'd instruction: %w", err)
 		}
 		sm.newEXECdInstruction = sm.stalled
-	} else if sm.delays > 0 {
-		sm.delays--
 	} else if sm.stalled {
 		err := sm.execute()
 		if err != nil {
@@ -219,6 +222,8 @@ func (sm *sm) dividedTick() error {
 		if !sm.jumped && !sm.stalled {
 			sm.incrementProgramCounter()
 		}
+	} else if sm.delays > 0 {
+		sm.delays--
 	} else {
 		err := sm.fetch()
 		if err != nil {
@@ -334,7 +339,29 @@ func (sm *sm) execute() error {
 		sm.outputShiftRegisterCounter = 0
 	}
 
-	// TODO: implement side-set and delay.
+	delaySidesetData := (sm.currentInstruction >> 8) & 0b11111
+	doSideset := (sm.sidesetBitCount > 0) && (!sm.sidesetIsOptional || ((sm.currentInstruction>>12)&0b1 == 1))
+	doDelay := (sm.sidesetBitCount < 5)
+	var delayMask uint16 = (0b1 << (5 - sm.sidesetBitCount)) - 1
+	var sidesetMask = ^delayMask
+	if sm.sidesetIsOptional {
+		sidesetMask &= 0b01111
+	}
+	if doSideset {
+		sidesetData := (delaySidesetData & sidesetMask) >> (5 - sm.sidesetBitCount)
+		pinCount := sm.sidesetBitCount
+		if sm.sidesetIsOptional {
+			pinCount -= 1
+		}
+		var pinData uint32 = bits.RotateLeft32(uint32(sidesetData), int(sm.sidesetBase))
+		var pinMask uint32 = bits.RotateLeft32((0b1<<pinCount)-1, int(sm.sidesetBase))
+		sm.pinSidesets = pinData
+		sm.pinSidesetsMask = pinMask
+	}
+	if doDelay {
+		delayData := (delaySidesetData & delayMask)
+		sm.delays = uint(delayData)
+	}
 
 	return nil
 }
@@ -443,13 +470,14 @@ const (
 
 var ErrSMInInvalidSource = errors.New("invalid source")
 
-func (sm *sm) ExecuteIn(source InSource, bits uint) error {
+func (sm *sm) ExecuteIn(source InSource, count uint) error {
 	if !sm.stalled {
 		var data uint32
-		var mask uint32 = (0b1 << bits) - 1
+		var mask uint32 = (0b1 << count) - 1
 		switch source {
 		case InSourcePins:
-			data = (sm.pinInputs & (mask << sm.inBase)) >> sm.inBase
+			pinMask := bits.RotateLeft32(mask, int(sm.inBase))
+			data = bits.RotateLeft32(sm.pinInputs&pinMask, -int(sm.inBase))
 		case InSourceX:
 			data = (sm.x & mask)
 		case InSourceY:
@@ -464,13 +492,13 @@ func (sm *sm) ExecuteIn(source InSource, bits uint) error {
 			return ErrSMInInvalidSource
 		}
 		if sm.inShiftDirectionRight {
-			sm.inputShiftRegister >>= bits
-			sm.inputShiftRegister |= (data << (32 - bits))
+			sm.inputShiftRegister >>= count
+			sm.inputShiftRegister |= (data << (32 - count))
 		} else {
-			sm.inputShiftRegister <<= bits
+			sm.inputShiftRegister <<= count
 			sm.inputShiftRegister |= data
 		}
-		sm.inputShiftRegisterCounter += bits
+		sm.inputShiftRegisterCounter += count
 	}
 	sm.stalled = false
 	if sm.autopush && sm.inputShiftRegisterCounter >= sm.pushThreshold {
@@ -502,7 +530,7 @@ const (
 
 var ErrSMOutInvalidDestination = errors.New("invalid out destination")
 
-func (sm *sm) ExecuteOut(destination OutDestination, bits uint) error {
+func (sm *sm) ExecuteOut(destination OutDestination, count uint) error {
 	alreadyStalled := sm.stalled
 	sm.stalled = false
 	if sm.autopull && sm.outputShiftRegisterCounter >= sm.pullThreshold {
@@ -523,30 +551,29 @@ func (sm *sm) ExecuteOut(destination OutDestination, bits uint) error {
 	}
 
 	var data uint32
-	var mask uint32 = (0b1 << bits) - 1
+	var mask uint32 = (0b1 << count) - 1
 	if sm.outShiftDirectionRight {
 		data = sm.outputShiftRegister & mask
-		sm.outputShiftRegister >>= bits
+		sm.outputShiftRegister >>= count
 	} else {
-		data = (sm.outputShiftRegister >> (32 - bits))
-		sm.outputShiftRegister <<= bits
+		data = (sm.outputShiftRegister >> (32 - count))
+		sm.outputShiftRegister <<= count
 	}
-	sm.outputShiftRegisterCounter += bits
+	sm.outputShiftRegisterCounter += count
 
 	writePins := true
 	if sm.inlineOutWriteEnableIsUsed {
 		writePins = ((data >> sm.inlineOutWriteEnableBit) & 0b1) == 1
 	}
 
-	var pinData uint32 = (data << sm.outBase)
-	var pinMask uint32 = ((0b1 << sm.outCount) - 1) << sm.outBase
+	var pinData uint32 = bits.RotateLeft32(data, int(sm.outBase))
+	var pinMask uint32 = bits.RotateLeft32((0b1<<sm.outCount)-1, int(sm.outBase))
 
 	switch destination {
 	case OutDestinationPins:
 		if writePins {
-			sm.pinOutputs &= ^pinMask
-			sm.pinOutputs |= pinData
-			sm.pinOutputMask |= pinMask
+			sm.pinOutputs = pinData
+			sm.pinOutputMask = pinMask
 		}
 	case OutDestinationX:
 		sm.x = data
@@ -556,16 +583,15 @@ func (sm *sm) ExecuteOut(destination OutDestination, bits uint) error {
 		// discards data
 	case OutDestinationPinDirections:
 		if writePins {
-			sm.pinOutputEnables &= ^pinMask
-			sm.pinOutputEnables |= pinData
-			sm.pinOutputEnablesMask |= pinMask
+			sm.pinOutputEnables = pinData
+			sm.pinOutputEnablesMask = pinMask
 		}
 	case OutDestinationProgramCounter:
 		sm.programCounter = uint(data % 32)
 		sm.jumped = true
 	case OutDestinationInputShiftRegister:
 		sm.inputShiftRegister = data
-		sm.inputShiftRegisterCounter = bits
+		sm.inputShiftRegisterCounter = count
 	case OutDestinationEXEC:
 		sm.execdInstruction = uint16(data)
 		sm.newEXECdInstruction = true
