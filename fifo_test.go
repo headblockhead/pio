@@ -9,7 +9,7 @@ import (
 const fifoTestingSize = 8
 
 func TestNewFIFO(t *testing.T) {
-	for i := range fifoTestingSize {
+	for i := range fifoTestingSize + 1 {
 		t.Run(fmt.Sprintf("size=%d", i), func(t *testing.T) {
 			fifo := newFIFO(uint(i))
 			expectedBufferLength := i
@@ -22,7 +22,7 @@ func TestNewFIFO(t *testing.T) {
 }
 
 func TestFIFOSize(t *testing.T) {
-	for i := range fifoTestingSize {
+	for i := range fifoTestingSize + 1 {
 		t.Run(fmt.Sprintf("size=%d", i), func(t *testing.T) {
 			fifo := newFIFO(uint(i))
 			expectedSize := i
@@ -93,9 +93,9 @@ func TestFIFOReadWrite(t *testing.T) {
 	}
 
 	for size := 1; size <= fifoTestingSize; size++ {
-		t.Run(fmt.Sprintf("size=%d", size), func(t *testing.T) {
-			fifo := newFIFO(uint(size))
-			for fillAmount := range size + 1 {
+		fifo := newFIFO(uint(size))
+		for fillAmount := 1; fillAmount <= size; fillAmount++ {
+			t.Run(fmt.Sprintf("size=%d,fillAmount=%d", size, fillAmount), func(t *testing.T) {
 				for i := range fillAmount {
 					err := fifo.write(testingValues[i])
 					if err != nil {
@@ -122,7 +122,7 @@ func TestFIFOReadWrite(t *testing.T) {
 				if err != ErrFIFOEmpty {
 					t.Errorf("expected error ErrFIFOEmpty, got %v (fillAmount %d)", err, fillAmount)
 				}
-			}
-		})
+			})
+		}
 	}
 }
