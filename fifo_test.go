@@ -2,7 +2,6 @@ package pio
 
 import (
 	"fmt"
-	"math/rand"
 	"testing"
 )
 
@@ -87,9 +86,9 @@ func TestFIFOReadWrite(t *testing.T) {
 		}
 	})
 
-	var testingValues [fifoTestingSize]uint32
-	for i := range fifoTestingSize {
-		testingValues[i] = rand.Uint32()
+	// Randomly chosen.
+	testingValues := [fifoTestingSize]uint32{
+		0x5e72d6bd, 0x7a705a80, 0xe83e901f, 0xc87d4cb6, 0xe74265dc, 0x7518bb81, 0xc821514a, 0x423fb469,
 	}
 
 	for size := 1; size <= fifoTestingSize; size++ {
@@ -99,28 +98,28 @@ func TestFIFOReadWrite(t *testing.T) {
 				for i := range fillAmount {
 					err := fifo.write(testingValues[i])
 					if err != nil {
-						t.Fatalf("unexpected error writing value %X to fifo (fillAmount %d): %v", testingValues[i], fillAmount, err)
+						t.Fatalf("unexpected error writing value %X (index %d) to fifo: %v", testingValues[i], i, err)
 					}
 				}
 				if fillAmount == size {
 					err := fifo.write(0)
 					if err != ErrFIFOFull {
-						t.Errorf("expected error ErrFIFOFull, got %v (fillAmount %d)", err, fillAmount)
+						t.Errorf("expected error ErrFIFOFull, got %v", err)
 					}
 				}
 				for i := range fillAmount {
 					expectedValue := testingValues[i]
 					actualValue, err := fifo.read()
 					if err != nil {
-						t.Fatalf("unexpected error reading value from fifo (fillAmount %d): %v", fillAmount, err)
+						t.Fatalf("unexpected error reading value from fifo (index %d): %v", i, err)
 					}
 					if expectedValue != actualValue {
-						t.Errorf("expected value %X, got %X (fillAmount %d)", expectedValue, actualValue, fillAmount)
+						t.Errorf("expected value %X, got %X (index %d)", expectedValue, actualValue, i)
 					}
 				}
 				_, err := fifo.read()
 				if err != ErrFIFOEmpty {
-					t.Errorf("expected error ErrFIFOEmpty, got %v (fillAmount %d)", err, fillAmount)
+					t.Errorf("expected error ErrFIFOEmpty, got %v", err)
 				}
 			})
 		}
