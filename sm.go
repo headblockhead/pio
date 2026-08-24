@@ -241,6 +241,11 @@ func (sm *sm) dividedTick() error {
 }
 
 func (sm *sm) fetch() error {
+	instruction, err := sm.im.read(sm.programCounter)
+	if err != nil {
+		return fmt.Errorf("error reading instruction memory: %w", err)
+	}
+	sm.currentInstruction = instruction
 	return nil
 }
 
@@ -267,7 +272,7 @@ func (sm *sm) execute() error {
 	case instructionJump:
 		condition := JumpCondition((sm.currentInstruction >> 5) & 0b111)
 		address := uint(sm.currentInstruction & 0b11111)
-		err := sm.ExecuteJump(condition, address)
+		err := sm.executeJump(condition, address)
 		if err != nil {
 			return fmt.Errorf("error excecuting jump: %w", err)
 		}
@@ -275,7 +280,7 @@ func (sm *sm) execute() error {
 		polarity := (sm.currentInstruction>>7)&0b1 == 1
 		source := WaitSource((sm.currentInstruction >> 5) & 0b11)
 		index := uint(sm.currentInstruction & 0b11111)
-		err := sm.ExecuteWait(polarity, source, index)
+		err := sm.executeWait(polarity, source, index)
 		if err != nil {
 			return fmt.Errorf("error excecuting wait: %w", err)
 		}
@@ -285,7 +290,7 @@ func (sm *sm) execute() error {
 		if numberOfBits == 0 {
 			numberOfBits = 32
 		}
-		err := sm.ExecuteIn(source, numberOfBits)
+		err := sm.executeIn(source, numberOfBits)
 		if err != nil {
 			return fmt.Errorf("error excecuting in: %w", err)
 		}
@@ -295,7 +300,7 @@ func (sm *sm) execute() error {
 		if numberOfBits == 0 {
 			numberOfBits = 32
 		}
-		err := sm.ExecuteOut(destination, numberOfBits)
+		err := sm.executeOut(destination, numberOfBits)
 		if err != nil {
 			return fmt.Errorf("error excecuting out: %w", err)
 		}
@@ -303,7 +308,7 @@ func (sm *sm) execute() error {
 		isPull := (sm.currentInstruction>>7)&0b1 == 1
 		ifThreshold := (sm.currentInstruction>>6)&0b1 == 1
 		block := (sm.currentInstruction>>5)&0b1 == 1
-		err := sm.ExecutePushOrPull(isPull, ifThreshold, block)
+		err := sm.executePushOrPull(isPull, ifThreshold, block)
 		if err != nil {
 			return fmt.Errorf("error excecuting push/pull: %w", err)
 		}
@@ -389,7 +394,7 @@ const (
 
 var ErrSMJumpInvalidCondition = errors.New("invalid condition")
 
-func (sm *sm) ExecuteJump(condition JumpCondition, address uint) error {
+func (sm *sm) executeJump(condition JumpCondition, address uint) error {
 	var shouldJump bool
 	switch condition {
 	case JumpAlways:
@@ -430,7 +435,7 @@ const (
 
 var ErrSMWaitInvalidSource = errors.New("invalid source")
 
-func (sm *sm) ExecuteWait(polarity bool, source WaitSource, index uint) error {
+func (sm *sm) executeWait(polarity bool, source WaitSource, index uint) error {
 	switch source {
 	case WaitSourceGPIO:
 		sm.stalled = ((sm.pinInputs>>index)&0b1 == 1) == polarity
@@ -470,7 +475,7 @@ const (
 
 var ErrSMInInvalidSource = errors.New("invalid source")
 
-func (sm *sm) ExecuteIn(source InSource, count uint) error {
+func (sm *sm) executeIn(source InSource, count uint) error {
 	if !sm.stalled {
 		var data uint32
 		var mask uint32 = (0b1 << count) - 1
@@ -530,7 +535,7 @@ const (
 
 var ErrSMOutInvalidDestination = errors.New("invalid out destination")
 
-func (sm *sm) ExecuteOut(destination OutDestination, count uint) error {
+func (sm *sm) executeOut(destination OutDestination, count uint) error {
 	alreadyStalled := sm.stalled
 	sm.stalled = false
 	if sm.autopull && sm.outputShiftRegisterCounter >= sm.pullThreshold {
@@ -602,7 +607,7 @@ func (sm *sm) ExecuteOut(destination OutDestination, count uint) error {
 	return nil
 }
 
-func (sm *sm) ExecutePushOrPull(isPull bool, ifThreshold bool, block bool) error {
+func (sm *sm) executePushOrPull(isPull bool, ifThreshold bool, block bool) error {
 	if isPull {
 		shouldPull := (!ifThreshold && !sm.autopull) || (sm.outputShiftRegisterCounter >= sm.pullThreshold)
 		sm.stalled = block && shouldPull && sm.fifoTX.isEmpty()

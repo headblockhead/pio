@@ -24,7 +24,7 @@ func (o Override) applyTo(v bool) (bool, error) {
 	case OverrideAlways1:
 		return true, nil
 	}
-	return false, ErrOverrideInvalid
+	return v, ErrOverrideInvalid
 }
 
 type gpio struct {
