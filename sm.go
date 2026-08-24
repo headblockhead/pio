@@ -270,7 +270,7 @@ func (sm *sm) execute() error {
 
 	switch instructionType {
 	case instructionJump:
-		condition := JumpCondition((sm.currentInstruction >> 5) & 0b111)
+		condition := jumpCondition((sm.currentInstruction >> 5) & 0b111)
 		address := uint(sm.currentInstruction & 0b11111)
 		err := sm.executeJump(condition, address)
 		if err != nil {
@@ -278,14 +278,14 @@ func (sm *sm) execute() error {
 		}
 	case instructionWait:
 		polarity := (sm.currentInstruction>>7)&0b1 == 1
-		source := WaitSource((sm.currentInstruction >> 5) & 0b11)
+		source := waitSource((sm.currentInstruction >> 5) & 0b11)
 		index := uint(sm.currentInstruction & 0b11111)
 		err := sm.executeWait(polarity, source, index)
 		if err != nil {
 			return fmt.Errorf("error excecuting wait: %w", err)
 		}
 	case instructionIn:
-		source := InSource((sm.currentInstruction >> 5) & 0b111)
+		source := inSource((sm.currentInstruction >> 5) & 0b111)
 		numberOfBits := uint(sm.currentInstruction & 0b11111)
 		if numberOfBits == 0 {
 			numberOfBits = 32
@@ -295,7 +295,7 @@ func (sm *sm) execute() error {
 			return fmt.Errorf("error excecuting in: %w", err)
 		}
 	case instructionOut:
-		destination := OutDestination((sm.currentInstruction >> 5) & 0b111)
+		destination := outDestination((sm.currentInstruction >> 5) & 0b111)
 		numberOfBits := uint(sm.currentInstruction & 0b11111)
 		if numberOfBits == 0 {
 			numberOfBits = 32
@@ -379,41 +379,41 @@ func (sm *sm) incrementProgramCounter() {
 	}
 }
 
-type JumpCondition uint
+type jumpCondition uint
 
 const (
-	JumpAlways                JumpCondition = 0b000
-	JumpXZero                 JumpCondition = 0b001
-	JumpXNonZeroThenDecrement JumpCondition = 0b010
-	JumpYZero                 JumpCondition = 0b011
-	JumpYNonZeroThenDecrement JumpCondition = 0b100
-	JumpXNotEqualY            JumpCondition = 0b101
-	JumpPin                   JumpCondition = 0b110
-	JumpOSRENotEmpty          JumpCondition = 0b111
+	jumpAlways                jumpCondition = 0b000
+	jumpXZero                 jumpCondition = 0b001
+	jumpXNonZeroThenDecrement jumpCondition = 0b010
+	jumpYZero                 jumpCondition = 0b011
+	jumpYNonZeroThenDecrement jumpCondition = 0b100
+	jumpXNotEqualY            jumpCondition = 0b101
+	jumpPin                   jumpCondition = 0b110
+	jumpOSRENotEmpty          jumpCondition = 0b111
 )
 
 var ErrSMJumpInvalidCondition = errors.New("invalid condition")
 
-func (sm *sm) executeJump(condition JumpCondition, address uint) error {
+func (sm *sm) executeJump(condition jumpCondition, address uint) error {
 	var shouldJump bool
 	switch condition {
-	case JumpAlways:
+	case jumpAlways:
 		shouldJump = true
-	case JumpXZero:
+	case jumpXZero:
 		shouldJump = (sm.x == 0)
-	case JumpXNonZeroThenDecrement:
+	case jumpXNonZeroThenDecrement:
 		shouldJump = (sm.x != 0)
 		sm.x--
-	case JumpYZero:
+	case jumpYZero:
 		shouldJump = (sm.y == 0)
-	case JumpYNonZeroThenDecrement:
+	case jumpYNonZeroThenDecrement:
 		shouldJump = (sm.y != 0)
 		sm.y--
-	case JumpXNotEqualY:
+	case jumpXNotEqualY:
 		shouldJump = (sm.x != sm.y)
-	case JumpPin:
+	case jumpPin:
 		shouldJump = (sm.pinInputs>>sm.jumpPin)&0b1 == 1
-	case JumpOSRENotEmpty:
+	case jumpOSRENotEmpty:
 		shouldJump = (sm.outputShiftRegisterCounter < sm.pullThreshold)
 	default:
 		return ErrSMJumpInvalidCondition
@@ -425,24 +425,24 @@ func (sm *sm) executeJump(condition JumpCondition, address uint) error {
 	return nil
 }
 
-type WaitSource uint
+type waitSource uint
 
 const (
-	WaitSourceGPIO WaitSource = 0b00
-	WaitSourcePin  WaitSource = 0b01
-	WaitSourceIRQ  WaitSource = 0b10
+	waitSourceGPIO waitSource = 0b00
+	waitSourcePin  waitSource = 0b01
+	waitSourceIRQ  waitSource = 0b10
 )
 
 var ErrSMWaitInvalidSource = errors.New("invalid source")
 
-func (sm *sm) executeWait(polarity bool, source WaitSource, index uint) error {
+func (sm *sm) executeWait(polarity bool, source waitSource, index uint) error {
 	switch source {
-	case WaitSourceGPIO:
+	case waitSourceGPIO:
 		sm.stalled = ((sm.pinInputs>>index)&0b1 == 1) == polarity
-	case WaitSourcePin:
+	case waitSourcePin:
 		pin := (sm.inBase + index) % 32
 		sm.stalled = ((sm.pinInputs>>pin)&0b1 == 1) == polarity
-	case WaitSourceIRQ:
+	case waitSourceIRQ:
 		relative := (index>>4)&0b1 == 1
 		irq := index
 		if relative {
@@ -462,36 +462,36 @@ func (sm *sm) executeWait(polarity bool, source WaitSource, index uint) error {
 	return nil
 }
 
-type InSource uint
+type inSource uint
 
 const (
-	InSourcePins InSource = 0b000
-	InSourceX    InSource = 0b001
-	InSourceY    InSource = 0b010
-	InSourceNull InSource = 0b011
-	InSourceISR  InSource = 0b110
-	InSourceOSR  InSource = 0b111
+	inSourcePins inSource = 0b000
+	inSourceX    inSource = 0b001
+	inSourceY    inSource = 0b010
+	inSourceNull inSource = 0b011
+	inSourceISR  inSource = 0b110
+	inSourceOSR  inSource = 0b111
 )
 
 var ErrSMInInvalidSource = errors.New("invalid source")
 
-func (sm *sm) executeIn(source InSource, count uint) error {
+func (sm *sm) executeIn(source inSource, count uint) error {
 	if !sm.stalled {
 		var data uint32
 		var mask uint32 = (0b1 << count) - 1
 		switch source {
-		case InSourcePins:
+		case inSourcePins:
 			pinMask := bits.RotateLeft32(mask, int(sm.inBase))
 			data = bits.RotateLeft32(sm.pinInputs&pinMask, -int(sm.inBase))
-		case InSourceX:
+		case inSourceX:
 			data = (sm.x & mask)
-		case InSourceY:
+		case inSourceY:
 			data = (sm.y & mask)
-		case InSourceNull:
+		case inSourceNull:
 			data = 0
-		case InSourceISR:
+		case inSourceISR:
 			data = (sm.inputShiftRegister & mask)
-		case InSourceOSR:
+		case inSourceOSR:
 			data = (sm.outputShiftRegister & mask)
 		default:
 			return ErrSMInInvalidSource
@@ -520,22 +520,22 @@ func (sm *sm) executeIn(source InSource, count uint) error {
 	return nil
 }
 
-type OutDestination uint
+type outDestination uint
 
 const (
-	OutDestinationPins               = 0b000
-	OutDestinationX                  = 0b001
-	OutDestinationY                  = 0b010
-	OutDestinationNull               = 0b011
-	OutDestinationPinDirections      = 0b100
-	OutDestinationProgramCounter     = 0b101
-	OutDestinationInputShiftRegister = 0b110
-	OutDestinationEXEC               = 0b111
+	outDestinationPins               = 0b000
+	outDestinationX                  = 0b001
+	outDestinationY                  = 0b010
+	outDestinationNull               = 0b011
+	outDestinationPinDirections      = 0b100
+	outDestinationProgramCounter     = 0b101
+	outDestinationInputShiftRegister = 0b110
+	outDestinationEXEC               = 0b111
 )
 
 var ErrSMOutInvalidDestination = errors.New("invalid out destination")
 
-func (sm *sm) executeOut(destination OutDestination, count uint) error {
+func (sm *sm) executeOut(destination outDestination, count uint) error {
 	alreadyStalled := sm.stalled
 	sm.stalled = false
 	if sm.autopull && sm.outputShiftRegisterCounter >= sm.pullThreshold {
@@ -575,29 +575,29 @@ func (sm *sm) executeOut(destination OutDestination, count uint) error {
 	var pinMask uint32 = bits.RotateLeft32((0b1<<sm.outCount)-1, int(sm.outBase))
 
 	switch destination {
-	case OutDestinationPins:
+	case outDestinationPins:
 		if writePins {
 			sm.pinOutputs = pinData
 			sm.pinOutputMask = pinMask
 		}
-	case OutDestinationX:
+	case outDestinationX:
 		sm.x = data
-	case OutDestinationY:
+	case outDestinationY:
 		sm.y = data
-	case OutDestinationNull:
+	case outDestinationNull:
 		// discards data
-	case OutDestinationPinDirections:
+	case outDestinationPinDirections:
 		if writePins {
 			sm.pinOutputEnables = pinData
 			sm.pinOutputEnablesMask = pinMask
 		}
-	case OutDestinationProgramCounter:
+	case outDestinationProgramCounter:
 		sm.programCounter = uint(data % 32)
 		sm.jumped = true
-	case OutDestinationInputShiftRegister:
+	case outDestinationInputShiftRegister:
 		sm.inputShiftRegister = data
 		sm.inputShiftRegisterCounter = count
-	case OutDestinationEXEC:
+	case outDestinationEXEC:
 		sm.execdInstruction = uint16(data)
 		sm.newEXECdInstruction = true
 	default:
@@ -635,5 +635,35 @@ func (sm *sm) executePushOrPull(isPull bool, ifThreshold bool, block bool) error
 			sm.inputShiftRegisterCounter = 0
 		}
 	}
+	return nil
+}
+
+type moveDestination uint
+type moveOperation uint
+type moveSource uint
+
+const (
+	moveDestinationPins moveDestination = 0b000
+	moveDestinationX    moveDestination = 0b001
+	moveDestinationY    moveDestination = 0b010
+	moveDestinationEXEC moveDestination = 0b100
+	moveDestinationPC   moveDestination = 0b101
+	moveDestinationISR  moveDestination = 0b110
+	moveDestinationOSR  moveDestination = 0b111
+
+	moveOperationNone       moveOperation = 0b00
+	moveOperationInvert     moveOperation = 0b01
+	moveOperationBitReverse moveOperation = 0b10
+
+	moveSourcePins   moveSource = 0b000
+	moveSourceX      moveSource = 0b001
+	moveSourceY      moveSource = 0b010
+	moveSourceNull   moveSource = 0b011
+	moveSourceStatus moveSource = 0b101
+	moveSourceISR    moveSource = 0b110
+	moveSourceOSR    moveSource = 0b111
+)
+
+func (sm *sm) executeMove(destination moveDestination, operation moveOperation, source moveSource) error {
 	return nil
 }
