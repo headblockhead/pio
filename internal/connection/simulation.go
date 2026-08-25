@@ -1,4 +1,4 @@
-package pio
+package connection
 
 import (
 	"errors"

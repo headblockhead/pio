@@ -1,4 +1,4 @@
-package pio
+package gpio
 
 import "errors"
 
@@ -13,7 +13,7 @@ const (
 
 var ErrOverrideInvalid = errors.New("invalid override")
 
-func (o Override) applyTo(v bool) (bool, error) {
+func (o Override) ApplyTo(v bool) (bool, error) {
 	switch o {
 	case OverrideNone:
 		return v, nil
@@ -25,15 +25,4 @@ func (o Override) applyTo(v bool) (bool, error) {
 		return true, nil
 	}
 	return v, ErrOverrideInvalid
-}
-
-type gpio struct {
-	outputEnableOverride Override
-	outputOverride       Override
-	inputOverride        Override
-	pioAssignment        uint
-}
-
-func newGPIO() *gpio {
-	return &gpio{}
 }

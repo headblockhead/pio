@@ -1,4 +1,4 @@
-package pio
+package gpio
 
 import "testing"
 
@@ -27,7 +27,7 @@ func TestOverride(t *testing.T) {
 
 	for _, testCase := range overrideTests {
 		t.Run(testCase.name, func(t *testing.T) {
-			actualOutput, actualError := testCase.override.applyTo(testCase.input)
+			actualOutput, actualError := testCase.override.ApplyTo(testCase.input)
 			if testCase.expectedError != actualError {
 				t.Fatalf("expected error to be %v, got %v", testCase.expectedError, actualError)
 			}
@@ -35,18 +35,5 @@ func TestOverride(t *testing.T) {
 				t.Errorf("expected output to be %v, got %v", testCase.expectedOutput, actualOutput)
 			}
 		})
-	}
-}
-
-func TestNewGPIO(t *testing.T) {
-	gpio := newGPIO()
-	if gpio.outputEnableOverride != OverrideNone {
-		t.Errorf("expected outputEnableOverride to be OverrideNone, got %v", gpio.outputEnableOverride)
-	}
-	if gpio.outputOverride != OverrideNone {
-		t.Errorf("expected outputOverride to be OverrideNone, got %v", gpio.outputOverride)
-	}
-	if gpio.inputOverride != OverrideNone {
-		t.Errorf("expected inputOverride to be OverrideNone, got %v", gpio.inputOverride)
 	}
 }
