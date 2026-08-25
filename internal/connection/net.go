@@ -1,15 +1,9 @@
-package pio
+package connection
 
 import (
 	"errors"
 	"fmt"
 )
-
-type Connection interface {
-	ID() string
-	GetState() PadState
-	SetInput(bool)
-}
 
 type net struct {
 	state       bool
