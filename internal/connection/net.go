@@ -6,17 +6,32 @@ import (
 )
 
 type net struct {
-	state       bool
+	isHigh      bool
 	connections map[string]Connection
 }
 
-var ErrInvalidPadState = errors.New("invalid pad state")
+func NewNet() *net {
+	return &net{}
+}
+
+var ErrAlreadyConnected = errors.New("already connected")
+
+func (n *net) connect(c Connection) error {
+	_, exists := n.connections[c.ID()]
+	if exists {
+		return ErrAlreadyConnected
+	}
+	n.connections[c.ID()] = c
+	return nil
+}
+
+var ErrInvalidConnectionState = errors.New("invalid connection state")
 var ErrConflictingDrive = errors.New("net is driven with conflicting values")
 var ErrConflictingPullups = errors.New("net is pulled with conflicting pulls")
 var ErrFloating = errors.New("net is floating")
 
 func (n *net) solve() error {
-	previousState := n.state
+	previousState := n.isHigh
 
 	drivenHigh := false
 	drivenLow := false
@@ -27,20 +42,20 @@ func (n *net) solve() error {
 	for _, c := range n.connections {
 		state := c.GetState()
 		switch state {
-		case PadNone:
+		case StateNone:
 			// nothing
-		case PadOutHigh:
+		case StateOutHigh:
 			drivenHigh = true
-		case PadOutLow:
+		case StateOutLow:
 			drivenLow = true
-		case PadBusKeeper:
+		case StateBusKeeper:
 			hasBusKeeper = true
-		case PadPullUp:
+		case StatePullUp:
 			pulledUp = true
-		case PadPullDown:
+		case StatePullDown:
 			pulledDown = true
 		default:
-			return fmt.Errorf("connection %s: %w", c.ID(), ErrInvalidPadState)
+			return fmt.Errorf("connection %s: %w", c.ID(), ErrInvalidConnectionState)
 		}
 	}
 
@@ -52,21 +67,21 @@ func (n *net) solve() error {
 	}
 
 	if drivenHigh {
-		n.state = true
+		n.isHigh = true
 	}
 	if drivenLow {
-		n.state = false
+		n.isHigh = false
 	}
 	if !drivenHigh && !drivenLow {
 		if pulledUp {
-			n.state = true
+			n.isHigh = true
 		}
 		if pulledDown {
-			n.state = false
+			n.isHigh = false
 		}
 		if !pulledUp && !pulledDown {
 			if hasBusKeeper {
-				n.state = previousState
+				n.isHigh = previousState
 			} else {
 				return ErrFloating
 			}
@@ -74,7 +89,7 @@ func (n *net) solve() error {
 	}
 
 	for _, c := range n.connections {
-		c.SetInput(n.state)
+		c.SetInput(n.isHigh)
 	}
 
 	return nil

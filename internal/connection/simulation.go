@@ -6,7 +6,7 @@ import (
 )
 
 type Simulation struct {
-	nets map[string]net
+	nets map[string]*net
 }
 
 func NewSimulation() *Simulation {
@@ -20,24 +20,18 @@ func (s *Simulation) CreateNet(id string) error {
 	if exists {
 		return ErrNetAlreadyExists
 	}
-	s.nets[id] = net{}
+	s.nets[id] = NewNet()
 	return nil
 }
 
 var ErrNetNotFound = errors.New("net not found")
-var ErrAlreadyConnected = errors.New("already connected")
 
 func (s *Simulation) Connect(c Connection, netID string) error {
 	net, ok := s.nets[netID]
 	if !ok {
 		return ErrNetNotFound
 	}
-	_, exists := net.connections[c.ID()]
-	if exists {
-		return ErrAlreadyConnected
-	}
-	net.connections[c.ID()] = c
-	return nil
+	return net.connect(c)
 }
 
 func (s *Simulation) Solve() error {
