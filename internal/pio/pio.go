@@ -1,18 +1,29 @@
 package pio
 
-import "github.com/headblockhead/pio/internal/memory"
-import "github.com/headblockhead/pio/internal/sm"
+import (
+	"github.com/headblockhead/pio/internal/memory"
+	"github.com/headblockhead/pio/internal/sm"
+)
 
 type PIO struct {
-	memoryReader  *memory.Memory
+	memory        *memory.Memory
 	stateMachines []*sm.SM
 
 	irqs uint8
 
-	pinOutputs           uint32
-	pinOutputMask        uint32
 	pinOutputEnables     uint32
 	pinOutputEnablesMask uint32
+	pinOutputs           uint32
+	pinOutputMask        uint32
 	pinSidesets          uint32
 	pinSidesetsMask      uint32
+}
+
+func NewPIO(memorySize uint, numberOfSMs uint) *PIO {
+	p := &PIO{}
+	p.memory = memory.NewMemory(memorySize)
+	for i := range numberOfSMs {
+		p.stateMachines[i] = sm.NewSM(i, p.memory.Reader())
+	}
+	return p
 }

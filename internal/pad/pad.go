@@ -1,25 +1,25 @@
 package pad
 
-import "github.com/headblockhead/pio/internal/connection"
+import "github.com/headblockhead/pio/internal/conn"
 
-func padState(shouldOutput bool, outputValue bool, pullUp bool, pullDown bool) connection.State {
+func padState(shouldOutput bool, outputValue bool, pullUp bool, pullDown bool) conn.State {
 	if shouldOutput {
 		if outputValue {
-			return connection.StateOutHigh
+			return conn.StateOutHigh
 		} else {
-			return connection.StateOutLow
+			return conn.StateOutLow
 		}
 	} else {
 		if pullUp && pullDown {
-			return connection.StateBusKeeper
+			return conn.StateBusKeeper
 		}
 		if pullUp {
-			return connection.StatePullUp
+			return conn.StatePullUp
 		}
 		if pullDown {
-			return connection.StatePullDown
+			return conn.StatePullDown
 		}
-		return connection.StateNone
+		return conn.StateNone
 	}
 }
 
@@ -34,7 +34,7 @@ type Pad struct {
 	outputEnabled bool
 	output        bool
 
-	stateHistory []connection.State
+	stateHistory []conn.State
 	inputHistory []bool
 }
 
@@ -45,7 +45,7 @@ func NewPad(id string) *Pad {
 		pullDown:     true,
 		inputEnabled: true,
 
-		stateHistory: make([]connection.State, 2),
+		stateHistory: make([]conn.State, 2),
 		inputHistory: make([]bool, 2),
 	}
 }
@@ -124,14 +124,14 @@ func (p *Pad) GetInput() bool {
 	return p.inputHistory[len(p.inputHistory)-1]
 }
 
-func (p *Pad) Connection() connection.Connection {
+func (p *Pad) Connection() conn.Connection {
 	return p
 }
 
 func (p *Pad) ID() string {
 	return p.id
 }
-func (p *Pad) GetState() connection.State {
+func (p *Pad) GetState() conn.State {
 	return p.stateHistory[len(p.stateHistory)-1]
 }
 func (p *Pad) SetInput(input bool) {
