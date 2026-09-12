@@ -1,4 +1,4 @@
-package connection
+package conn
 
 type State uint
 
