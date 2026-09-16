@@ -73,7 +73,7 @@ func TestFIFOFullEmpty(t *testing.T) {
 	}
 }
 
-func TestFIFOReadWrite(t *testing.T) {
+func TestFIFOReadWriteLevel(t *testing.T) {
 	t.Run("size=0", func(t *testing.T) {
 		fifo0 := NewFIFO(0)
 		err := fifo0.Write(0)
@@ -84,6 +84,9 @@ func TestFIFOReadWrite(t *testing.T) {
 		if err != ErrFIFOEmpty {
 			t.Errorf("expected error ErrFIFOEmpty, got %v", err)
 		}
+		if fifo0.Level() != 0 {
+			t.Errorf("exepcted fifo of size 0 to have level 0")
+		}
 	})
 
 	// Randomly chosen.
@@ -93,6 +96,9 @@ func TestFIFOReadWrite(t *testing.T) {
 
 	for size := 1; size <= fifoTestingSize; size++ {
 		fifo := NewFIFO(uint(size))
+		if fifo.Level() != 0 {
+			t.Errorf("expected new fifo to have level 0")
+		}
 		for fillAmount := 1; fillAmount <= size; fillAmount++ {
 			t.Run(fmt.Sprintf("size=%d,fillAmount=%d", size, fillAmount), func(t *testing.T) {
 				for i := range fillAmount {
@@ -100,6 +106,9 @@ func TestFIFOReadWrite(t *testing.T) {
 					if err != nil {
 						t.Fatalf("unexpected error writing value %X (index %d) to fifo: %v", testingValues[i], i, err)
 					}
+				}
+				if fifo.Level() != uint(fillAmount) {
+					t.Errorf("expected level %d, got %d", fillAmount, fifo.Level())
 				}
 				if fillAmount == size {
 					err := fifo.Write(0)
