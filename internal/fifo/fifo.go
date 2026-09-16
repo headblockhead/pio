@@ -21,6 +21,7 @@ func (f *FIFO) Size() uint {
 
 type FIFOReader interface {
 	Read() (uint32, error)
+	Level() uint
 	IsEmpty() bool
 }
 
@@ -45,6 +46,7 @@ func (f *FIFO) IsEmpty() bool {
 
 type FIFOWriter interface {
 	Write(uint32) error
+	Level() uint
 	IsFull() bool
 }
 
@@ -65,4 +67,8 @@ func (f *FIFO) Write(value uint32) error {
 }
 func (f *FIFO) IsFull() bool {
 	return f.level >= f.Size()
+}
+
+func (f *FIFO) Level() uint {
+	return f.level
 }
