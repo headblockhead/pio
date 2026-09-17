@@ -10,25 +10,36 @@ type net struct {
 	connections map[string]Connection
 }
 
-func NewNet() *net {
+func newNet() *net {
 	return &net{}
 }
 
-var ErrAlreadyConnected = errors.New("already connected")
+var ErrNetConnectionAlreadyConnected = errors.New("connection is already connected to this net")
 
 func (n *net) connect(c Connection) error {
 	_, exists := n.connections[c.ID()]
 	if exists {
-		return ErrAlreadyConnected
+		return ErrNetConnectionAlreadyConnected
 	}
 	n.connections[c.ID()] = c
 	return nil
 }
 
-var ErrInvalidConnectionState = errors.New("invalid connection state")
-var ErrConflictingDrive = errors.New("net is driven with conflicting values")
-var ErrConflictingPullups = errors.New("net is pulled with conflicting pulls")
-var ErrFloating = errors.New("net is floating")
+var ErrNetConnectionNotCurrentlyConnected = errors.New("connection is not currently connected to this net")
+
+func (n *net) disconnect(c Connection) error {
+	_, exists := n.connections[c.ID()]
+	if !exists {
+		return ErrNetConnectionNotCurrentlyConnected
+	}
+	delete(n.connections, c.ID())
+	return nil
+}
+
+var ErrSolveInvalidConnectionState = errors.New("invalid connection state")
+var ErrSolveConflictingDrive = errors.New("net is driven with conflicting values by at least two connections")
+var ErrSolveConflictingPullups = errors.New("net is pulled with conflicting pulls by at least two connections")
+var ErrSolveFloating = errors.New("net is floating, which is likely unintentional")
 
 func (n *net) solve() error {
 	previousState := n.isHigh
@@ -55,15 +66,15 @@ func (n *net) solve() error {
 		case StatePullDown:
 			pulledDown = true
 		default:
-			return fmt.Errorf("connection %s: %w", c.ID(), ErrInvalidConnectionState)
+			return fmt.Errorf("connection %s: %w", c.ID(), ErrSolveInvalidConnectionState)
 		}
 	}
 
 	if drivenHigh && drivenLow {
-		return ErrConflictingDrive
+		return ErrSolveConflictingDrive
 	}
 	if pulledUp && pulledDown {
-		return ErrConflictingPullups
+		return ErrSolveConflictingPullups
 	}
 
 	if drivenHigh {
@@ -83,7 +94,7 @@ func (n *net) solve() error {
 			if hasBusKeeper {
 				n.isHigh = previousState
 			} else {
-				return ErrFloating
+				return ErrSolveFloating
 			}
 		}
 	}

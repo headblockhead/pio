@@ -13,25 +13,33 @@ func NewSimulation() *Simulation {
 	return &Simulation{}
 }
 
-var ErrNetAlreadyExists = errors.New("net already exists")
+var ErrSimulationNetAlreadyExists = errors.New("net already exists")
 
 func (s *Simulation) CreateNet(id string) error {
 	_, exists := s.nets[id]
 	if exists {
-		return ErrNetAlreadyExists
+		return ErrSimulationNetAlreadyExists
 	}
-	s.nets[id] = NewNet()
+	s.nets[id] = newNet()
 	return nil
 }
 
-var ErrNetNotFound = errors.New("net not found")
+var ErrSimulationNetNotFound = errors.New("net not found")
 
 func (s *Simulation) Connect(c Connection, netID string) error {
 	net, ok := s.nets[netID]
 	if !ok {
-		return ErrNetNotFound
+		return ErrSimulationNetNotFound
 	}
 	return net.connect(c)
+}
+
+func (s *Simulation) Disconnect(c Connection, netID string) error {
+	net, ok := s.nets[netID]
+	if !ok {
+		return ErrSimulationNetNotFound
+	}
+	return net.disconnect(c)
 }
 
 func (s *Simulation) Solve() error {

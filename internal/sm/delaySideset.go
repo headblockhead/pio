@@ -16,8 +16,8 @@ func delaySidesetUpdate(sidesetIsOptional bool, sidesetBasePin uint, sidesetBitC
 		if sidesetIsOptional {
 			pinCount -= 1
 		}
-		var pinData uint32 = bits.RotateLeft32(uint32(sidesetData), int(sidesetBasePin))
-		var pinMask uint32 = bits.RotateLeft32((0b1<<pinCount)-1, int(sidesetBasePin))
+		var pinData uint32 = bits.RotateLeft32(uint32(sidesetData), -int(sidesetBasePin))
+		var pinMask uint32 = bits.RotateLeft32((0b1<<pinCount)-1, -int(sidesetBasePin))
 		pinSidesets = pinData
 		pinSidesetsMask = pinMask
 	}

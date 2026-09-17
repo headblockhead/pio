@@ -5,10 +5,10 @@ import (
 	"testing"
 )
 
-const fifoTestingSize = 8
+const fifoMaxTestingSize = 8
 
 func TestNewFIFO(t *testing.T) {
-	for i := range fifoTestingSize + 1 {
+	for i := range fifoMaxTestingSize + 1 {
 		t.Run(fmt.Sprintf("size=%d", i), func(t *testing.T) {
 			fifo := NewFIFO(uint(i))
 			expectedBufferLength := i
@@ -20,8 +20,8 @@ func TestNewFIFO(t *testing.T) {
 	}
 }
 
-func TestFIFOSize(t *testing.T) {
-	for i := range fifoTestingSize + 1 {
+func TestSize(t *testing.T) {
+	for i := range fifoMaxTestingSize + 1 {
 		t.Run(fmt.Sprintf("size=%d", i), func(t *testing.T) {
 			fifo := NewFIFO(uint(i))
 			expectedSize := i
@@ -33,7 +33,7 @@ func TestFIFOSize(t *testing.T) {
 	}
 }
 
-func TestFIFOFullEmpty(t *testing.T) {
+func TestFullEmpty(t *testing.T) {
 	t.Run("size=0", func(t *testing.T) {
 		fifo0 := NewFIFO(0)
 		if !fifo0.IsEmpty() {
@@ -43,7 +43,7 @@ func TestFIFOFullEmpty(t *testing.T) {
 			t.Errorf("expected fifo of size 0 to be full")
 		}
 	})
-	for size := 1; size <= fifoTestingSize; size++ {
+	for size := 1; size <= fifoMaxTestingSize; size++ {
 		t.Run(fmt.Sprintf("size=%d", size), func(t *testing.T) {
 			fifo := NewFIFO(uint(size))
 			if !fifo.IsEmpty() {
@@ -73,7 +73,7 @@ func TestFIFOFullEmpty(t *testing.T) {
 	}
 }
 
-func TestFIFOReadWriteLevel(t *testing.T) {
+func TestReadWriteLevel(t *testing.T) {
 	t.Run("size=0", func(t *testing.T) {
 		fifo0 := NewFIFO(0)
 		err := fifo0.Write(0)
@@ -90,11 +90,11 @@ func TestFIFOReadWriteLevel(t *testing.T) {
 	})
 
 	// Randomly chosen.
-	testingValues := [fifoTestingSize]uint32{
+	testingValues := [fifoMaxTestingSize]uint32{
 		0x5e72d6bd, 0x7a705a80, 0xe83e901f, 0xc87d4cb6, 0xe74265dc, 0x7518bb81, 0xc821514a, 0x423fb469,
 	}
 
-	for size := 1; size <= fifoTestingSize; size++ {
+	for size := 1; size <= fifoMaxTestingSize; size++ {
 		fifo := NewFIFO(uint(size))
 		if fifo.Level() != 0 {
 			t.Errorf("expected new fifo to have level 0")
