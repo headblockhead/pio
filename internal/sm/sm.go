@@ -42,8 +42,8 @@ type Observer interface {
 	AutopullEnabled() bool
 	AutopushEnabled() bool
 
-	SidesetBasePin() uint
-	SidesetBitCount() uint
+	BaseSidesetPin() uint
+	BitCountSideset() uint
 	BaseSetPin() uint
 	PinCountSet() uint
 	BaseInPin() uint
@@ -113,7 +113,7 @@ type Configurator interface {
 	ForceInstruction(uint16)
 
 	RestartClockDivider()
-	SetClockDivisor(float32)
+	SetClockDivisor(float32) error
 }
 
 type Controller interface {
@@ -223,14 +223,128 @@ func (sm *SM) Observer() Observer {
 	return sm
 }
 
+func (sm *SM) Index() uint { return sm.index }
+
+func (sm *SM) FIFORXObserver() fifo.Observer { return sm.fifoRX.Observer() }
+func (sm *SM) FIFOTXObserver() fifo.Observer { return sm.fifoTX.Observer() }
+
+func (sm *SM) Enabled() bool { return sm.enabled }
+
+func (sm *SM) PinOutputEnables() uint32     { return sm.pinOutputEnables }
+func (sm *SM) PinOutputEnablesMask() uint32 { return sm.pinOutputEnablesMask }
+func (sm *SM) PinOutputs() uint32           { return sm.pinOutputs }
+func (sm *SM) PinOutputsMask() uint32       { return sm.pinOutputsMask }
+func (sm *SM) IRQWrites() uint8             { return sm.irqWrites }
+func (sm *SM) IRQWritesMask() uint8         { return sm.irqWritesMask }
+
+func (sm *SM) SidesetIsOptional() bool            { return sm.sidesetIsOptional }
+func (sm *SM) SidesetControlsPinDirection() bool  { return sm.sidesetControlsPinDirection }
+func (sm *SM) OutWriteEnableUsed() bool           { return sm.outWriteEnableUsed }
+func (sm *SM) OutWriteEnableBitIndex() uint       { return sm.outWriteEnableBitIndex }
+func (sm *SM) StickyOutSetAssertionEnabled() bool { return sm.stickyOutSetAssertionEnabled }
+
+func (sm *SM) WrapFromAddress() uint { return sm.wrapFromAddress }
+func (sm *SM) WrapToAddress() uint   { return sm.wrapToAddress }
+
+func (sm *SM) StatusValueUsesRXFIFO() bool      { return sm.statusValueUsesRXFIFO }
+func (sm *SM) StatusValueComparisonLevel() uint { return sm.statusValueComparisonLevel }
+func (sm *SM) PullThreshold() uint              { return sm.pullThreshold }
+func (sm *SM) PushThreshold() uint              { return sm.pushThreshold }
+func (sm *SM) OutShiftMovesRight() bool         { return sm.outShiftMovesRight }
+func (sm *SM) InShiftMovesRight() bool          { return sm.inShiftMovesRight }
+func (sm *SM) AutopullEnabled() bool            { return sm.autopullEnabled }
+func (sm *SM) AutopushEnabled() bool            { return sm.autopushEnabled }
+
+func (sm *SM) BaseSidesetPin() uint  { return sm.baseSidesetPin }
+func (sm *SM) BitCountSideset() uint { return sm.bitCountSideset }
+func (sm *SM) BaseSetPin() uint      { return sm.baseSetPin }
+func (sm *SM) PinCountSet() uint     { return sm.pinCountSet }
+func (sm *SM) BaseInPin() uint       { return sm.baseInPin }
+func (sm *SM) BaseOutPin() uint      { return sm.baseOutPin }
+func (sm *SM) PinCountOut() uint     { return sm.pinCountOut }
+func (sm *SM) JumpPin() uint         { return sm.jumpPin }
+
+func (sm *SM) ProgramCounter() uint          { return sm.programCounter }
+func (sm *SM) CurrentInstruction() uint16    { return sm.currentInstruction }
+func (sm *SM) Stalled() bool                 { return sm.stalled }
+func (sm *SM) Jumped() bool                  { return sm.jumped }
+func (sm *SM) ForcedInstructionActive() bool { return sm.forcedInstructionActive }
+func (sm *SM) ForcedInstruction() uint16     { return sm.forcedInstruction }
+func (sm *SM) EXECdInstructionActive() bool  { return sm.execdInstructionActive }
+func (sm *SM) EXECdInstruction() uint16      { return sm.execdInstruction }
+func (sm *SM) DelaysRemaining() uint         { return sm.delaysRemaining }
+
+func (sm *SM) OutputShiftRegister() uint32      { return sm.outputShiftRegister }
+func (sm *SM) OutputShiftRegisterCounter() uint { return sm.outputShiftRegisterCounter }
+func (sm *SM) InputShiftRegister() uint32       { return sm.inputShiftRegister }
+func (sm *SM) InputShiftRegisterCounter() uint  { return sm.inputShiftRegisterCounter }
+func (sm *SM) XRegister() uint32                { return sm.xRegister }
+func (sm *SM) YRegister() uint32                { return sm.yRegister }
+
+func (sm *SM) ClockDivisor() float32 {
+	return clockDivisorToFloat32(sm.clockDivisorInteger, sm.clockDivisorFractional)
+}
+func (sm *SM) ClockDivisorInteger() uint16            { return sm.clockDivisorInteger }
+func (sm *SM) ClockDivisorFractional() uint8          { return sm.clockDivisorFractional }
+func (sm *SM) ClockDividerTicksRemaining() uint       { return sm.clockDividerTicksRemaining }
+func (sm *SM) ClockDividerFractionAccumulator() uint8 { return sm.clockDividerFractionAccumulator }
+
 func (sm *SM) Configurator() Configurator {
 	return sm
 }
 
-func (sm *SM) Controller() Controller {
-	return sm
-}
+func (sm *SM) Restart() {
+	sm.inputShiftRegisterCounter = 0
+	sm.outputShiftRegisterCounter = 32
+	sm.inputShiftRegister = 0
+	sm.delaysRemaining = 0
 
+	// TODO deal with instruction latching logic
+	// also TODO, seperate waiting-on-IRQ from other types of stall?
+	sm.forcedInstructionActive = false
+	sm.execdInstructionActive = false
+}
+func (sm *SM) SetEnabled(enabled bool)                     {}
+func (sm *SM) SetSidesetIsOptional(sidesetIsOptional bool) { sm.sidesetIsOptional = sidesetIsOptional }
+func (sm *SM) SetSidesetControlsPinDirection(sidesetControlsPinDirection bool) {
+	sm.sidesetControlsPinDirection = sidesetControlsPinDirection
+}
+func (sm *SM) SetOutWriteEnableUsed(outWriteEnableUsed bool) {
+	sm.outWriteEnableUsed = outWriteEnableUsed
+}
+func (sm *SM) SetOutWriteEnableBitIndex(outWriteEnableBitIndex uint)             {}
+func (sm *SM) SetStickyOutSetAssertionEnabled(stickyOutSetAssertionEnabled bool) {}
+
+func (sm *SM) SetWrapFromAddress(wrapFromAddress uint) {}
+func (sm *SM) SetWrapToAddress(wrapToAddress uint)     {}
+
+func (sm *SM) SetStatusValueUsesRXFIFO(statusValueUsesRXFIFO bool)           {}
+func (sm *SM) SetStatusValueComparisonLevel(statusValueComparisonLevel uint) {}
+func (sm *SM) SetPullThreshold(pullThreshold uint)                           {}
+func (sm *SM) SetPushThreshold(pushThreshold uint)                           {}
+func (sm *SM) SetOutShiftMovesRight(outShiftMovesRight bool)                 {}
+func (sm *SM) SetInShiftMovesRight(inShiftMovesRight bool)                   {}
+func (sm *SM) SetAutopullEnabled(autopullEnabled bool)                       {}
+func (sm *SM) SetAutopushEnabled(autopushEnabled bool)                       {}
+
+func (sm *SM) SetSidesetBasePin(sidesetBasePin uint)   {}
+func (sm *SM) SetSidesetBitCount(sidesetBitCount uint) {}
+func (sm *SM) SetBaseSetPin(baseSetPin uint)           {}
+func (sm *SM) SetPinCountSet(pinCountSet uint)         {}
+func (sm *SM) SetBaseInPin(baseInPin uint)             {}
+func (sm *SM) SetBaseOutPin(baseOutPin uint)           {}
+func (sm *SM) SetPinCountOut(pinCountOut uint)         {}
+func (sm *SM) SetJumpPin(jumpPin uint)                 {}
+
+func (sm *SM) SetFIFORXJoin(fifoRXJoin bool) {}
+func (sm *SM) SetFIFOTXJoin(fifoTXJoin bool) {}
+
+func (sm *SM) ForceInstruction(forcedInstruction uint16) {}
+
+func (sm *SM) RestartClockDivider() {
+	sm.clockDividerTicksRemaining = 0
+	sm.clockDividerFractionAccumulator = 0
+}
 func (sm *SM) SetClockDivisor(divider float32) error {
 	divInt, divFrac, err := clockDivisorFromFloat32(divider)
 	if err != nil {
@@ -239,6 +353,10 @@ func (sm *SM) SetClockDivisor(divider float32) error {
 	sm.clockDivisorInteger = divInt
 	sm.clockDivisorFractional = divFrac
 	return nil
+}
+
+func (sm *SM) Controller() Controller {
+	return sm
 }
 
 func (sm *SM) Tick() error {
