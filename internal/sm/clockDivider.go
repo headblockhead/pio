@@ -16,6 +16,10 @@ func clockDivisorFromFloat32(divisor float32) (divisorInteger uint16, divisorFra
 	return divisorInteger, divisorFractional, nil
 }
 
+func clockDivisorToFloat32(divisorInteger uint16, divisorFractional uint8) float32 {
+	return float32(divisorInteger) + (float32(divisorFractional) / 256)
+}
+
 func clockDividerUpdateTicksRemaining(dividerFractionAccumulator uint8, divisorInteger uint16, divisorFractional uint8) (newDividerTicksRemaining uint, newDividerFractionAccumulator uint8) {
 	var actualDivisorInteger uint
 	// clockDivisorInteger as 0 represents a divisor of 65536, as dividing by 0 is not a useful operation.
