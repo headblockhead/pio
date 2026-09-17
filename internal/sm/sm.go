@@ -9,6 +9,126 @@ import (
 	"github.com/headblockhead/pio/internal/memory"
 )
 
+type Observer interface {
+	Index() uint
+
+	FIFORXObserver() fifo.Observer
+	FIFOTXObserver() fifo.Observer
+
+	Enabled() bool
+
+	PinOutputEnables() uint32
+	PinOutputEnablesMask() uint32
+	PinOutputs() uint32
+	PinOutputsMask() uint32
+	IRQWrites() uint8
+	IRQWritesMask() uint8
+
+	SidesetIsOptional() bool
+	SidesetControlsPinDirection() bool
+	OutWriteEnableUsed() bool
+	OutWriteEnableBitIndex() uint
+	StickyOutSetAssertionEnabled() bool
+
+	WrapFromAddress() uint
+	WrapToAddress() uint
+
+	StatusValueUsesRXFIFO() bool
+	StatusValueComparisonLevel() uint
+	PullThreshold() uint
+	PushThreshold() uint
+	OutShiftMovesRight() bool
+	InShiftMovesRight() bool
+	AutopullEnabled() bool
+	AutopushEnabled() bool
+
+	SidesetBasePin() uint
+	SidesetBitCount() uint
+	BaseSetPin() uint
+	PinCountSet() uint
+	BaseInPin() uint
+	BaseOutPin() uint
+	PinCountOut() uint
+	JumpPin() uint
+
+	ProgramCounter() uint
+	CurrentInstruction() uint16
+	Stalled() bool
+	Jumped() bool
+	ForcedInstructionActive() bool
+	ForcedInstruction() uint16
+	EXECdInstructionActive() bool
+	EXECdInstruction() uint16
+	DelaysRemaining() uint
+
+	OutputShiftRegister() uint32
+	OutputShiftRegisterCounter() uint
+	InputShiftRegister() uint32
+	InputShiftRegisterCounter() uint
+	XRegister() uint32
+	YRegister() uint32
+
+	ClockDivisor() float32
+	ClockDivisorInteger() uint16
+	ClockDivisorFractional() uint8
+	ClockDividerTicksRemaining() uint
+	ClockDividerFractionAccumulator() uint8
+}
+
+type Configurator interface {
+	Observer
+
+	Restart()
+	SetEnabled(bool)
+	SetSidesetIsOptional(bool)
+	SetSidesetControlsPinDirection(bool)
+	SetOutWriteEnableUsed(bool)
+	SetOutWriteEnableBitIndex(uint)
+	SetStickyOutSetAssertionEnabled(bool)
+
+	SetWrapFromAddress(uint)
+	SetWrapToAddress(uint)
+
+	SetStatusValueUsesRXFIFO(bool)
+	SetStatusValueComparisonLevel(uint)
+	SetPullThreshold(uint)
+	SetPushThreshold(uint)
+	SetOutShiftMovesRight(bool)
+	SetInShiftMovesRight(bool)
+	SetAutopullEnabled(bool)
+	SetAutopushEnabled(bool)
+
+	SetSidesetBasePin(uint)
+	SetSidesetBitCount(uint)
+	SetBaseSetPin(uint)
+	SetPinCountSet(uint)
+	SetBaseInPin(uint)
+	SetBaseOutPin(uint)
+	SetPinCountOut(uint)
+	SetJumpPin(uint)
+
+	SetFIFORXJoin(bool)
+	SetFIFOTXJoin(bool)
+
+	ForceInstruction(uint16)
+
+	RestartClockDivider()
+	SetClockDivisor(float32)
+}
+
+type Controller interface {
+	SetPinInputs(uint32)
+	SetIRQInputs(uint8)
+	PinOutputEnables() uint32
+	PinOutputEnablesMask() uint32
+	PinOutputs() uint32
+	PinOutputsMask() uint32
+	IRQWrites() uint8
+	IRQWritesMask() uint8
+
+	Tick() error
+}
+
 type SM struct {
 	index uint
 
@@ -24,7 +144,7 @@ type SM struct {
 	pinOutputEnables     uint32
 	pinOutputEnablesMask uint32
 	pinOutputs           uint32
-	pinOutputMask        uint32
+	pinOutputsMask       uint32
 	pinSidesets          uint32
 	pinSidesetsMask      uint32
 	irqWrites            uint8
@@ -32,9 +152,9 @@ type SM struct {
 
 	sidesetIsOptional            bool
 	sidesetControlsPinDirection  bool
-	inlineOutWriteEnableIsUsed   bool
-	inlineOutWriteEnableBitIndex uint
-	stickyOutSetAssertion        bool
+	outWriteEnableUsed           bool
+	outWriteEnableBitIndex       uint
+	stickyOutSetAssertionEnabled bool
 
 	wrapFromAddress uint
 	wrapToAddress   uint
@@ -45,16 +165,16 @@ type SM struct {
 	pushThreshold              uint
 	outShiftMovesRight         bool
 	inShiftMovesRight          bool
-	autoPull                   bool
-	autoPush                   bool
+	autopullEnabled            bool
+	autopushEnabled            bool
 
-	sidesetBasePin  uint
-	sidesetBitCount uint
-	setBasePin      uint
-	setPinCount     uint
-	inBasePin       uint
-	outBasePin      uint
-	outPinCount     uint
+	baseSidesetPin  uint
+	bitCountSideset uint
+	baseSetPin      uint
+	pinCountSet     uint
+	baseInPin       uint
+	baseOutPin      uint
+	pinCountOut     uint
 	jumpPin         uint
 
 	programCounter          uint
@@ -71,8 +191,8 @@ type SM struct {
 	outputShiftRegisterCounter uint
 	inputShiftRegister         uint32
 	inputShiftRegisterCounter  uint
-	x                          uint32
-	y                          uint32
+	xRegister                  uint32
+	yRegister                  uint32
 
 	clockDivisorInteger    uint16
 	clockDivisorFractional uint8
@@ -90,13 +210,25 @@ func NewSM(index uint, memoryReader memory.MemoryReader) *SM {
 		fifoTX:       fifo.NewFIFO(4),
 
 		wrapFromAddress:            31,
-		setPinCount:                5,
+		pinCountSet:                5,
 		outputShiftRegisterCounter: 32,
 		outShiftMovesRight:         true,
 		inShiftMovesRight:          true,
 
 		clockDivisorInteger: 1,
 	}
+}
+
+func (sm *SM) Observer() Observer {
+	return sm
+}
+
+func (sm *SM) Configurator() Configurator {
+	return sm
+}
+
+func (sm *SM) Controller() Controller {
+	return sm
 }
 
 func (sm *SM) SetClockDivisor(divider float32) error {
@@ -110,11 +242,11 @@ func (sm *SM) SetClockDivisor(divider float32) error {
 }
 
 func (sm *SM) Tick() error {
-	if !sm.stickyOutSetAssertion {
+	if !sm.stickyOutSetAssertionEnabled {
 		sm.pinOutputEnables = 0
 		sm.pinOutputEnablesMask = 0
 		sm.pinOutputs = 0
-		sm.pinOutputMask = 0
+		sm.pinOutputsMask = 0
 	}
 	sm.pinSidesets = 0
 	sm.pinSidesetsMask = 0
@@ -127,8 +259,12 @@ func (sm *SM) Tick() error {
 		if err != nil {
 			return fmt.Errorf("error executing forced instruction: %w", err)
 		}
-		sm.forcedInstructionActive = sm.stalled
-	} else if sm.clockDividerTicksRemaining == 0 {
+		if sm.stalled {
+			sm.forcedInstructionActive = true
+			// "If an instruction written to INSTR stalls, it is stored in the same instruction latch used by OUT EXEC and MOV EXEC, and will overwrite an in-progress instruction there."
+			sm.execdInstruction = sm.forcedInstruction
+		}
+	} else if sm.clockDividerTicksRemaining == 0 && sm.enabled {
 		err := sm.dividedTick()
 		if err != nil {
 			return fmt.Errorf("error performing divided tick: %w", err)
@@ -277,7 +413,7 @@ func (sm *SM) execute() error {
 		return ErrSMInvalidInstructionType
 	}
 
-	if sm.autoPull && sm.outputShiftRegisterCounter >= sm.pullThreshold && !sm.fifoTX.IsEmpty() {
+	if sm.autopullEnabled && sm.outputShiftRegisterCounter >= sm.pullThreshold && !sm.fifoTX.IsEmpty() {
 		osr, err := sm.fifoTX.Read()
 		if err != nil {
 			return fmt.Errorf("error reading TX FIFO for autopull: %w", err)
@@ -287,7 +423,7 @@ func (sm *SM) execute() error {
 	}
 
 	delaySidesetData := (sm.currentInstruction >> 8) & 0b11111
-	sm.pinSidesets, sm.pinSidesetsMask, sm.delaysRemaining = delaySidesetUpdate(sm.sidesetIsOptional, sm.sidesetBasePin, sm.sidesetBitCount, delaySidesetData)
+	sm.pinSidesets, sm.pinSidesetsMask, sm.delaysRemaining = delaySidesetUpdate(sm.sidesetIsOptional, sm.baseSidesetPin, sm.bitCountSideset, delaySidesetData)
 
 	return nil
 }
@@ -321,17 +457,17 @@ func (sm *SM) executeJump(condition jumpCondition, address uint) error {
 	case jumpAlways:
 		shouldJump = true
 	case jumpXZero:
-		shouldJump = (sm.x == 0)
+		shouldJump = (sm.xRegister == 0)
 	case jumpXNonZeroThenDecrement:
-		shouldJump = (sm.x != 0)
-		sm.x--
+		shouldJump = (sm.xRegister != 0)
+		sm.xRegister--
 	case jumpYZero:
-		shouldJump = (sm.y == 0)
+		shouldJump = (sm.yRegister == 0)
 	case jumpYNonZeroThenDecrement:
-		shouldJump = (sm.y != 0)
-		sm.y--
+		shouldJump = (sm.yRegister != 0)
+		sm.yRegister--
 	case jumpXNotEqualY:
-		shouldJump = (sm.x != sm.y)
+		shouldJump = (sm.xRegister != sm.yRegister)
 	case jumpPin:
 		shouldJump = (sm.pinInputs>>sm.jumpPin)&0b1 == 1
 	case jumpOSRENotEmpty:
@@ -361,7 +497,7 @@ func (sm *SM) executeWait(polarity bool, source waitSource, index uint) error {
 	case waitSourceGPIO:
 		sm.stalled = ((sm.pinInputs>>index)&0b1 == 1) == polarity
 	case waitSourcePin:
-		pin := (sm.inBasePin + index) % 32
+		pin := (sm.baseInPin + index) % 32
 		sm.stalled = ((sm.pinInputs>>pin)&0b1 == 1) == polarity
 	case waitSourceIRQ:
 		relative := (index>>4)&0b1 == 1
@@ -402,12 +538,12 @@ func (sm *SM) executeIn(source inSource, count uint) error {
 		var mask uint32 = (0b1 << count) - 1
 		switch source {
 		case inSourcePins:
-			pinMask := bits.RotateLeft32(mask, -int(sm.inBasePin))
-			data = bits.RotateLeft32(sm.pinInputs&pinMask, -int(sm.inBasePin))
+			pinMask := bits.RotateLeft32(mask, -int(sm.baseInPin))
+			data = bits.RotateLeft32(sm.pinInputs&pinMask, -int(sm.baseInPin))
 		case inSourceX:
-			data = (sm.x & mask)
+			data = (sm.xRegister & mask)
 		case inSourceY:
-			data = (sm.y & mask)
+			data = (sm.yRegister & mask)
 		case inSourceNull:
 			data = 0
 		case inSourceISR:
@@ -427,7 +563,7 @@ func (sm *SM) executeIn(source inSource, count uint) error {
 		sm.inputShiftRegisterCounter += count
 	}
 	sm.stalled = false
-	if sm.autoPush && sm.inputShiftRegisterCounter >= sm.pushThreshold {
+	if sm.autopushEnabled && sm.inputShiftRegisterCounter >= sm.pushThreshold {
 		sm.stalled = sm.fifoRX.IsFull()
 		if !sm.stalled {
 			err := sm.fifoRX.Write(sm.inputShiftRegister)
@@ -459,7 +595,7 @@ var ErrSMOutInvalidDestination = errors.New("invalid out destination")
 func (sm *SM) executeOut(destination outDestination, count uint) error {
 	alreadyStalled := sm.stalled
 	sm.stalled = false
-	if sm.autoPull && sm.outputShiftRegisterCounter >= sm.pullThreshold {
+	if sm.autopullEnabled && sm.outputShiftRegisterCounter >= sm.pullThreshold {
 		if !sm.fifoTX.IsEmpty() {
 			osr, err := sm.fifoTX.Read()
 			if err != nil {
@@ -488,23 +624,23 @@ func (sm *SM) executeOut(destination outDestination, count uint) error {
 	sm.outputShiftRegisterCounter += count
 
 	writePins := true
-	if sm.inlineOutWriteEnableIsUsed {
-		writePins = ((data >> sm.inlineOutWriteEnableBitIndex) & 0b1) == 1
+	if sm.outWriteEnableUsed {
+		writePins = ((data >> sm.outWriteEnableBitIndex) & 0b1) == 1
 	}
 
-	var pinData uint32 = bits.RotateLeft32(data, -int(sm.outBasePin))
-	var pinMask uint32 = bits.RotateLeft32((0b1<<sm.outPinCount)-1, -int(sm.outBasePin))
+	var pinData uint32 = bits.RotateLeft32(data, -int(sm.baseOutPin))
+	var pinMask uint32 = bits.RotateLeft32((0b1<<sm.pinCountOut)-1, -int(sm.baseOutPin))
 
 	switch destination {
 	case outDestinationPins:
 		if writePins {
 			sm.pinOutputs = pinData
-			sm.pinOutputMask = pinMask
+			sm.pinOutputsMask = pinMask
 		}
 	case outDestinationX:
-		sm.x = data
+		sm.xRegister = data
 	case outDestinationY:
-		sm.y = data
+		sm.yRegister = data
 	case outDestinationNull:
 		// discards data
 	case outDestinationPinDirections:
@@ -530,7 +666,7 @@ func (sm *SM) executeOut(destination outDestination, count uint) error {
 
 func (sm *SM) executePushOrPull(isPull bool, ifThreshold bool, block bool) error {
 	if isPull {
-		shouldPull := (!ifThreshold && !sm.autoPull) || (sm.outputShiftRegisterCounter >= sm.pullThreshold)
+		shouldPull := (!ifThreshold && !sm.autopullEnabled) || (sm.outputShiftRegisterCounter >= sm.pullThreshold)
 		sm.stalled = block && shouldPull && sm.fifoTX.IsEmpty()
 		if shouldPull && !sm.fifoTX.IsEmpty() {
 			osr, err := sm.fifoTX.Read()
@@ -541,7 +677,7 @@ func (sm *SM) executePushOrPull(isPull bool, ifThreshold bool, block bool) error
 			sm.outputShiftRegisterCounter = 0
 			sm.stalled = false
 		} else if shouldPull && !block {
-			sm.outputShiftRegister = sm.x
+			sm.outputShiftRegister = sm.xRegister
 			sm.outputShiftRegisterCounter = 0
 		}
 	} else {
@@ -594,11 +730,11 @@ func (sm *SM) executeMove(destination moveDestination, operation moveOperation, 
 	var sourceData uint32
 	switch source {
 	case moveSourcePins:
-		sourceData = bits.RotateLeft32(sm.pinInputs, -int(sm.inBasePin))
+		sourceData = bits.RotateLeft32(sm.pinInputs, -int(sm.baseInPin))
 	case moveSourceX:
-		sourceData = sm.x
+		sourceData = sm.xRegister
 	case moveSourceY:
-		sourceData = sm.y
+		sourceData = sm.yRegister
 	case moveSourceNull:
 		sourceData = 0
 	case moveSourceStatus:
@@ -616,7 +752,7 @@ func (sm *SM) executeMove(destination moveDestination, operation moveOperation, 
 	case moveSourceISR:
 		sourceData = sm.inputShiftRegister
 	case moveSourceOSR:
-		if sm.autoPull {
+		if sm.autopullEnabled {
 			return ErrSMMoveSourceOSRDisallowedWhenAutopullEnabled
 		} else {
 			sourceData = sm.outputShiftRegister
@@ -638,25 +774,26 @@ func (sm *SM) executeMove(destination moveDestination, operation moveOperation, 
 	}
 
 	writePins := true
-	if sm.inlineOutWriteEnableIsUsed {
-		writePins = ((modifiedData >> sm.inlineOutWriteEnableBitIndex) & 0b1) == 1
+	if sm.outWriteEnableUsed {
+		writePins = ((modifiedData >> sm.outWriteEnableBitIndex) & 0b1) == 1
 	}
 
 	switch destination {
 	case moveDestinationPins:
 		if writePins {
-			sm.pinOutputs = bits.RotateLeft32(modifiedData, -int(sm.outBasePin))
-			sm.pinOutputMask = 0xFFFFFFFF
+			sm.pinOutputs = bits.RotateLeft32(modifiedData, -int(sm.baseOutPin))
+			sm.pinOutputsMask = 0xFFFFFFFF
 		}
 	case moveDestinationX:
-		sm.x = modifiedData
+		sm.xRegister = modifiedData
 	case moveDestinationY:
-		sm.y = modifiedData
+		sm.yRegister = modifiedData
 	case moveDestinationEXEC:
 		sm.execdInstruction = uint16(modifiedData)
 		sm.execdInstructionActive = true
 	case moveDestinationPC:
 		sm.programCounter = uint(modifiedData % 32)
+		sm.jumped = true
 	case moveDestinationISR:
 		sm.inputShiftRegister = modifiedData
 		sm.inputShiftRegisterCounter = 0
@@ -716,16 +853,16 @@ const (
 var ErrSMSetInvalidDestination = errors.New("invalid destination")
 
 func (sm *SM) executeSet(destination setDestination, data uint) error {
-	var pinData uint32 = bits.RotateLeft32(uint32(data), -int(sm.setBasePin))
-	var pinMask uint32 = bits.RotateLeft32((0b1<<sm.setPinCount)-1, -int(sm.setBasePin))
+	var pinData uint32 = bits.RotateLeft32(uint32(data), -int(sm.baseSetPin))
+	var pinMask uint32 = bits.RotateLeft32((0b1<<sm.pinCountSet)-1, -int(sm.baseSetPin))
 	switch destination {
 	case setDestinationPins:
 		sm.pinOutputs = pinData
-		sm.pinOutputMask = pinMask
+		sm.pinOutputsMask = pinMask
 	case setDestinationX:
-		sm.x = uint32(data)
+		sm.xRegister = uint32(data)
 	case setDestinationY:
-		sm.y = uint32(data)
+		sm.yRegister = uint32(data)
 	case setDestinationPinDirections:
 		sm.pinOutputEnables = pinData
 		sm.pinOutputEnablesMask = pinMask

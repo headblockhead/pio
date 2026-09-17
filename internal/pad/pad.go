@@ -50,19 +50,7 @@ func NewPad(id string) *Pad {
 	}
 }
 
-func (p *Pad) Tick() {
-	for i := 1; i < len(p.stateHistory); i++ {
-		p.stateHistory[i] = p.stateHistory[i-1]
-	}
-	p.stateHistory[0] = padState(p.outputEnabled && !p.outputDisabled, p.output, p.pullUp, p.pullDown)
-
-	for i := 1; i < len(p.inputHistory); i++ {
-		p.inputHistory[i] = p.inputHistory[i-1]
-	}
-	// p.inputHistory[0] is updated by SetInput.
-}
-
-type PadConfigurator interface {
+type Configurator interface {
 	SetPullUp(bool)
 	SetPullDown(bool)
 	SetOutputDisabled(bool)
@@ -71,7 +59,7 @@ type PadConfigurator interface {
 	SetInputDelayCycles(uint)
 }
 
-func (p *Pad) Configurator() PadConfigurator {
+func (p *Pad) Configurator() Configurator {
 	return p
 }
 
@@ -104,13 +92,15 @@ func (p *Pad) SetInputDelayCycles(c uint) {
 	}
 }
 
-type PadController interface {
+type Controller interface {
 	SetOutputEnabled(bool)
 	SetOutput(bool)
 	GetInput() bool
+
+	Tick() error
 }
 
-func (p *Pad) Controller() PadController {
+func (p *Pad) Controller() Controller {
 	return p
 }
 
@@ -122,6 +112,20 @@ func (p *Pad) SetOutput(o bool) {
 }
 func (p *Pad) GetInput() bool {
 	return p.inputHistory[len(p.inputHistory)-1]
+}
+
+func (p *Pad) Tick() error {
+	for i := 1; i < len(p.stateHistory); i++ {
+		p.stateHistory[i] = p.stateHistory[i-1]
+	}
+	p.stateHistory[0] = padState(p.outputEnabled && !p.outputDisabled, p.output, p.pullUp, p.pullDown)
+
+	for i := 1; i < len(p.inputHistory); i++ {
+		p.inputHistory[i] = p.inputHistory[i-1]
+	}
+	// p.inputHistory[0] is updated by SetInput.
+
+	return nil
 }
 
 func (p *Pad) Connection() conn.Connection {
