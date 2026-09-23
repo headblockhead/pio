@@ -71,6 +71,7 @@ type Observer interface {
 	ClockDivisor() float32
 	ClockDivisorInteger() uint16
 	ClockDivisorFractional() uint8
+
 	ClockDividerTicksRemaining() uint
 	ClockDividerFractionAccumulator() uint8
 }
@@ -358,6 +359,9 @@ func (sm *SM) SetClockDivisor(divider float32) error {
 func (sm *SM) Controller() Controller {
 	return sm
 }
+
+func (sm *SM) SetPinInputs(pinInputs uint32) {}
+func (sm *SM) SetIRQInputs(irqInputs uint8)  {}
 
 func (sm *SM) Tick() error {
 	if !sm.stickyOutSetAssertionEnabled {
