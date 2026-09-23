@@ -54,7 +54,7 @@ type Observer interface {
 	ProgramCounter() uint
 	CurrentInstruction() uint16
 	Stalled() bool
-	WaitingOnIRQ() bool
+	StalledIRQ() bool
 	Jumped() bool
 	DelaysRemaining() uint
 	NewForcedInstruction() bool
@@ -86,29 +86,29 @@ type Configurator interface {
 	SetSidesetIsOptional(bool)
 	SetSidesetControlsPinDirection(bool)
 	SetOutWriteEnableUsed(bool)
-	SetOutWriteEnableBitIndex(uint)
+	SetOutWriteEnableBitIndex(uint) error
 	SetStickyOutSetAssertionEnabled(bool)
 
-	SetWrapFromAddress(uint)
-	SetWrapToAddress(uint)
+	SetWrapFromAddress(uint) error
+	SetWrapToAddress(uint) error
 
 	SetStatusValueUsesRXFIFO(bool)
-	SetStatusValueComparisonLevel(uint)
-	SetPullThreshold(uint)
-	SetPushThreshold(uint)
+	SetStatusValueComparisonLevel(uint) error
+	SetPullThreshold(uint) error
+	SetPushThreshold(uint) error
 	SetOutShiftMovesRight(bool)
 	SetInShiftMovesRight(bool)
 	SetAutopullEnabled(bool)
 	SetAutopushEnabled(bool)
 
-	SetSidesetBasePin(uint)
-	SetSidesetBitCount(uint)
-	SetBaseSetPin(uint)
-	SetPinCountSet(uint)
-	SetBaseInPin(uint)
-	SetBaseOutPin(uint)
-	SetPinCountOut(uint)
-	SetJumpPin(uint)
+	SetSidesetBasePin(uint) error
+	SetSidesetBitCount(uint) error
+	SetBaseSetPin(uint) error
+	SetPinCountSet(uint) error
+	SetBaseInPin(uint) error
+	SetBaseOutPin(uint) error
+	SetPinCountOut(uint) error
+	SetJumpPin(uint) error
 
 	SetFIFORXJoin(bool)
 	SetFIFOTXJoin(bool)
@@ -117,6 +117,8 @@ type Configurator interface {
 
 	RestartClockDivider()
 	SetClockDivisor(float32) error
+	SetClockDivisorInteger(uint16)
+	SetClockDivisorFractional(uint8)
 }
 
 type Controller interface {
@@ -272,6 +274,7 @@ func (sm *SM) JumpPin() uint         { return sm.jumpPin }
 func (sm *SM) ProgramCounter() uint           { return sm.programCounter }
 func (sm *SM) CurrentInstruction() uint16     { return sm.currentInstruction }
 func (sm *SM) Stalled() bool                  { return sm.stalled }
+func (sm *SM) StalledIRQ() bool               { return sm.stalledIRQ }
 func (sm *SM) Jumped() bool                   { return sm.jumped }
 func (sm *SM) DelaysRemaining() uint          { return sm.delaysRemaining }
 func (sm *SM) NewForcedInstruction() bool     { return sm.newForcedInstruction }
@@ -313,20 +316,33 @@ func (sm *SM) Restart() {
 	sm.pinOutputs = 0
 	sm.pinOutputsMask = 0
 }
-
-func (sm *SM) SetEnabled(enabled bool)                     {}
-func (sm *SM) SetSidesetIsOptional(sidesetIsOptional bool) { sm.sidesetIsOptional = sidesetIsOptional }
+func (sm *SM) SetEnabled(enabled bool) {
+	sm.enabled = enabled
+}
+func (sm *SM) SetSidesetIsOptional(sidesetIsOptional bool) {
+	sm.sidesetIsOptional = sidesetIsOptional
+}
 func (sm *SM) SetSidesetControlsPinDirection(sidesetControlsPinDirection bool) {
 	sm.sidesetControlsPinDirection = sidesetControlsPinDirection
 }
 func (sm *SM) SetOutWriteEnableUsed(outWriteEnableUsed bool) {
 	sm.outWriteEnableUsed = outWriteEnableUsed
 }
-func (sm *SM) SetOutWriteEnableBitIndex(outWriteEnableBitIndex uint)             {}
-func (sm *SM) SetStickyOutSetAssertionEnabled(stickyOutSetAssertionEnabled bool) {}
+func (sm *SM) SetOutWriteEnableBitIndex(outWriteEnableBitIndex uint) error {
+	return errors.New("unimplemented: SetOutWriteEnableBitIndex")
+}
+func (sm *SM) SetStickyOutSetAssertionEnabled(stickyOutSetAssertionEnabled bool) {
+	sm.stickyOutSetAssertionEnabled = stickyOutSetAssertionEnabled
+}
 
-func (sm *SM) SetWrapFromAddress(wrapFromAddress uint) {}
-func (sm *SM) SetWrapToAddress(wrapToAddress uint)     {}
+func (sm *SM) SetWrapFromAddress(wrapFromAddress uint) error {
+	return errors.New("unimplemented: SetWrapFromAddress")
+}
+func (sm *SM) SetWrapToAddress(wrapToAddress uint) error {
+	return errors.New("unimplemented: SetWrapToAddress")
+}
+
+// TODO: Implement Configurator and Controller
 
 func (sm *SM) SetStatusValueUsesRXFIFO(statusValueUsesRXFIFO bool)           {}
 func (sm *SM) SetStatusValueComparisonLevel(statusValueComparisonLevel uint) {}
