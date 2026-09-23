@@ -54,12 +54,14 @@ type Observer interface {
 	ProgramCounter() uint
 	CurrentInstruction() uint16
 	Stalled() bool
+	WaitingOnIRQ() bool
 	Jumped() bool
-	ForcedInstructionActive() bool
-	ForcedInstruction() uint16
-	EXECdInstructionActive() bool
-	EXECdInstruction() uint16
 	DelaysRemaining() uint
+	NewForcedInstruction() bool
+	ForcedInstruction() uint16
+	ForcedInstructionStalled() bool
+	ExecdInstructionActive() bool
+	LatchedInstruction() uint16
 
 	OutputShiftRegister() uint32
 	OutputShiftRegisterCounter() uint
@@ -178,15 +180,17 @@ type SM struct {
 	pinCountOut     uint
 	jumpPin         uint
 
-	programCounter          uint
-	currentInstruction      uint16
-	stalled                 bool
-	jumped                  bool
-	forcedInstructionActive bool
-	forcedInstruction       uint16
-	execdInstructionActive  bool
-	execdInstruction        uint16
-	delaysRemaining         uint
+	programCounter           uint
+	currentInstruction       uint16
+	stalled                  bool
+	stalledIRQ               bool
+	jumped                   bool
+	delaysRemaining          uint
+	newForcedInstruction     bool
+	forcedInstruction        uint16
+	forcedInstructionStalled bool
+	execdInstructionActive   bool
+	latchedInstruction       uint16
 
 	outputShiftRegister        uint32
 	outputShiftRegisterCounter uint
@@ -265,15 +269,16 @@ func (sm *SM) BaseOutPin() uint      { return sm.baseOutPin }
 func (sm *SM) PinCountOut() uint     { return sm.pinCountOut }
 func (sm *SM) JumpPin() uint         { return sm.jumpPin }
 
-func (sm *SM) ProgramCounter() uint          { return sm.programCounter }
-func (sm *SM) CurrentInstruction() uint16    { return sm.currentInstruction }
-func (sm *SM) Stalled() bool                 { return sm.stalled }
-func (sm *SM) Jumped() bool                  { return sm.jumped }
-func (sm *SM) ForcedInstructionActive() bool { return sm.forcedInstructionActive }
-func (sm *SM) ForcedInstruction() uint16     { return sm.forcedInstruction }
-func (sm *SM) EXECdInstructionActive() bool  { return sm.execdInstructionActive }
-func (sm *SM) EXECdInstruction() uint16      { return sm.execdInstruction }
-func (sm *SM) DelaysRemaining() uint         { return sm.delaysRemaining }
+func (sm *SM) ProgramCounter() uint           { return sm.programCounter }
+func (sm *SM) CurrentInstruction() uint16     { return sm.currentInstruction }
+func (sm *SM) Stalled() bool                  { return sm.stalled }
+func (sm *SM) Jumped() bool                   { return sm.jumped }
+func (sm *SM) DelaysRemaining() uint          { return sm.delaysRemaining }
+func (sm *SM) NewForcedInstruction() bool     { return sm.newForcedInstruction }
+func (sm *SM) ForcedInstruction() uint16      { return sm.forcedInstruction }
+func (sm *SM) ForcedInstructionStalled() bool { return sm.forcedInstructionStalled }
+func (sm *SM) ExecdInstructionActive() bool   { return sm.execdInstructionActive }
+func (sm *SM) LatchedInstruction() uint16     { return sm.latchedInstruction }
 
 func (sm *SM) OutputShiftRegister() uint32      { return sm.outputShiftRegister }
 func (sm *SM) OutputShiftRegisterCounter() uint { return sm.outputShiftRegisterCounter }
@@ -299,12 +304,16 @@ func (sm *SM) Restart() {
 	sm.outputShiftRegisterCounter = 32
 	sm.inputShiftRegister = 0
 	sm.delaysRemaining = 0
-
-	// TODO deal with instruction latching logic
-	// also TODO, seperate waiting-on-IRQ from other types of stall?
-	sm.forcedInstructionActive = false
+	sm.stalledIRQ = false
+	sm.forcedInstructionStalled = false
 	sm.execdInstructionActive = false
+	sm.latchedInstruction = 0
+	sm.pinOutputEnables = 0
+	sm.pinOutputEnablesMask = 0
+	sm.pinOutputs = 0
+	sm.pinOutputsMask = 0
 }
+
 func (sm *SM) SetEnabled(enabled bool)                     {}
 func (sm *SM) SetSidesetIsOptional(sidesetIsOptional bool) { sm.sidesetIsOptional = sidesetIsOptional }
 func (sm *SM) SetSidesetControlsPinDirection(sidesetControlsPinDirection bool) {
@@ -363,6 +372,8 @@ func (sm *SM) Controller() Controller {
 func (sm *SM) SetPinInputs(pinInputs uint32) {}
 func (sm *SM) SetIRQInputs(irqInputs uint8)  {}
 
+var ErrSMForcedInstructionStalledDuringEXECdInstruction = errors.New("a forced instruction stalled while an EXEC'd instruction was pending, which would've overwritten the EXEC'd instruction")
+
 func (sm *SM) Tick() error {
 	if !sm.stickyOutSetAssertionEnabled {
 		sm.pinOutputEnables = 0
@@ -374,18 +385,29 @@ func (sm *SM) Tick() error {
 	sm.pinSidesetsMask = 0
 	sm.irqWrites = 0
 	sm.irqWritesMask = 0
+	sm.currentInstruction = 0
 
-	if sm.forcedInstructionActive {
+	if sm.newForcedInstruction {
 		sm.currentInstruction = sm.forcedInstruction
+		sm.newForcedInstruction = false
 		err := sm.execute()
 		if err != nil {
-			return fmt.Errorf("error executing forced instruction: %w", err)
+			return fmt.Errorf("error executing new forced instruction: %w", err)
 		}
-		if sm.stalled {
-			sm.forcedInstructionActive = true
-			// "If an instruction written to INSTR stalls, it is stored in the same instruction latch used by OUT EXEC and MOV EXEC, and will overwrite an in-progress instruction there."
-			sm.execdInstruction = sm.forcedInstruction
+		if sm.stalled || sm.stalledIRQ {
+			if sm.execdInstructionActive {
+				return ErrSMForcedInstructionStalledDuringEXECdInstruction
+			}
+			sm.forcedInstructionStalled = true
+			sm.latchedInstruction = sm.currentInstruction
 		}
+	} else if sm.forcedInstructionStalled {
+		sm.currentInstruction = sm.latchedInstruction
+		err := sm.execute()
+		if err != nil {
+			return fmt.Errorf("error executing stalled forced instruction: %w", err)
+		}
+		sm.forcedInstructionStalled = (sm.stalled || sm.stalledIRQ)
 	} else if sm.clockDividerTicksRemaining == 0 && sm.enabled {
 		err := sm.dividedTick()
 		if err != nil {
@@ -404,18 +426,22 @@ func (sm *SM) Tick() error {
 
 func (sm *SM) dividedTick() error {
 	if sm.execdInstructionActive {
-		sm.currentInstruction = sm.execdInstruction
+		sm.currentInstruction = sm.latchedInstruction
 		err := sm.execute()
 		if err != nil {
 			return fmt.Errorf("error executing EXEC'd instruction: %w", err)
 		}
-		sm.execdInstructionActive = sm.stalled
-	} else if sm.stalled {
-		err := sm.execute()
+		sm.execdInstructionActive = sm.stalled || sm.stalledIRQ
+	} else if sm.stalled || sm.stalledIRQ {
+		err := sm.fetch()
+		if err != nil {
+			return fmt.Errorf("error fetching stalled instruction: %w", err)
+		}
+		err = sm.execute()
 		if err != nil {
 			return fmt.Errorf("error executing stalled instruction: %w", err)
 		}
-		if !sm.jumped && !sm.stalled {
+		if !sm.jumped && !(sm.stalled || sm.stalledIRQ) {
 			sm.incrementProgramCounter()
 		}
 	} else if sm.delaysRemaining > 0 {
@@ -429,7 +455,7 @@ func (sm *SM) dividedTick() error {
 		if err != nil {
 			return fmt.Errorf("error executing instruction: %w", err)
 		}
-		if !sm.jumped && !sm.stalled {
+		if !sm.jumped && !(sm.stalled || sm.stalledIRQ) {
 			sm.incrementProgramCounter()
 		}
 	}
@@ -777,7 +803,7 @@ func (sm *SM) executeOut(destination outDestination, count uint) error {
 		sm.inputShiftRegister = data
 		sm.inputShiftRegisterCounter = count
 	case outDestinationEXEC:
-		sm.execdInstruction = uint16(data)
+		sm.latchedInstruction = uint16(data)
 		sm.execdInstructionActive = true
 	default:
 		return ErrSMOutInvalidDestination
@@ -911,7 +937,7 @@ func (sm *SM) executeMove(destination moveDestination, operation moveOperation, 
 	case moveDestinationY:
 		sm.yRegister = modifiedData
 	case moveDestinationEXEC:
-		sm.execdInstruction = uint16(modifiedData)
+		sm.latchedInstruction = uint16(modifiedData)
 		sm.execdInstructionActive = true
 	case moveDestinationPC:
 		sm.programCounter = uint(modifiedData % 32)
@@ -940,8 +966,8 @@ func (sm *SM) executeIRQ(clearIRQ bool, waitIRQ bool, index uint) error {
 		irq = upperBit | lowerBits
 	}
 
-	if sm.stalled {
-		sm.stalled = ((sm.irqInputs >> irq) & 0b1) == 1
+	if sm.stalledIRQ {
+		sm.stalledIRQ = ((sm.irqInputs >> irq) & 0b1) == 1
 		return nil
 	}
 
@@ -956,7 +982,7 @@ func (sm *SM) executeIRQ(clearIRQ bool, waitIRQ bool, index uint) error {
 		sm.irqWrites |= irqMask
 		sm.irqWritesMask |= irqMask
 		if waitIRQ {
-			sm.stalled = true
+			sm.stalledIRQ = true
 		}
 	}
 
