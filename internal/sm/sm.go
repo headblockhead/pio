@@ -68,7 +68,9 @@ type Observer interface {
 	InputShiftRegister() uint32
 	InputShiftRegisterCounter() uint
 	XRegister() uint32
+	XRegisterInitialized() bool
 	YRegister() uint32
+	YRegisterInitialized() bool
 
 	ClockDivisor() float32
 	ClockDivisorInteger() uint16
@@ -101,8 +103,8 @@ type Configurator interface {
 	SetAutopullEnabled(bool)
 	SetAutopushEnabled(bool)
 
-	SetSidesetBasePin(uint) error
-	SetSidesetBitCount(uint) error
+	SetBaseSidesetPin(uint) error
+	SetBitCountSideset(uint) error
 	SetBaseSetPin(uint) error
 	SetPinCountSet(uint) error
 	SetBaseInPin(uint) error
@@ -110,8 +112,7 @@ type Configurator interface {
 	SetPinCountOut(uint) error
 	SetJumpPin(uint) error
 
-	SetFIFORXJoin(bool)
-	SetFIFOTXJoin(bool)
+	SetFIFOJoin(FIFOJoin) error
 
 	ForceInstruction(uint16)
 
@@ -199,7 +200,9 @@ type SM struct {
 	inputShiftRegister         uint32
 	inputShiftRegisterCounter  uint
 	xRegister                  uint32
+	xRegisterInitialized       bool
 	yRegister                  uint32
+	yRegisterInitialized       bool
 
 	clockDivisorInteger    uint16
 	clockDivisorFractional uint8
@@ -288,7 +291,9 @@ func (sm *SM) OutputShiftRegisterCounter() uint { return sm.outputShiftRegisterC
 func (sm *SM) InputShiftRegister() uint32       { return sm.inputShiftRegister }
 func (sm *SM) InputShiftRegisterCounter() uint  { return sm.inputShiftRegisterCounter }
 func (sm *SM) XRegister() uint32                { return sm.xRegister }
+func (sm *SM) XRegisterInitialized() bool       { return sm.xRegisterInitialized }
 func (sm *SM) YRegister() uint32                { return sm.yRegister }
+func (sm *SM) YRegisterInitialized() bool       { return sm.yRegisterInitialized }
 
 func (sm *SM) ClockDivisor() float32 {
 	return clockDivisorToFloat32(sm.clockDivisorInteger, sm.clockDivisorFractional)
@@ -328,44 +333,201 @@ func (sm *SM) SetSidesetControlsPinDirection(sidesetControlsPinDirection bool) {
 func (sm *SM) SetOutWriteEnableUsed(outWriteEnableUsed bool) {
 	sm.outWriteEnableUsed = outWriteEnableUsed
 }
+
+var ErrSMSetOutWriteEnableBitIndexOutOfRange = errors.New("out write enable bit index must be less than 32")
+
 func (sm *SM) SetOutWriteEnableBitIndex(outWriteEnableBitIndex uint) error {
-	return errors.New("unimplemented: SetOutWriteEnableBitIndex")
+	if outWriteEnableBitIndex > 31 {
+		return ErrSMSetOutWriteEnableBitIndexOutOfRange
+	}
+	sm.outWriteEnableBitIndex = outWriteEnableBitIndex
+	return nil
 }
 func (sm *SM) SetStickyOutSetAssertionEnabled(stickyOutSetAssertionEnabled bool) {
 	sm.stickyOutSetAssertionEnabled = stickyOutSetAssertionEnabled
 }
 
+var ErrSMSetWrapFromAddressOutOfRange = errors.New("wrap from address must be less than 32")
+
 func (sm *SM) SetWrapFromAddress(wrapFromAddress uint) error {
-	return errors.New("unimplemented: SetWrapFromAddress")
+	if wrapFromAddress > 31 {
+		return ErrSMSetWrapFromAddressOutOfRange
+	}
+	sm.wrapFromAddress = wrapFromAddress
+	return nil
 }
+
+var ErrSMSetWrapToAddressOutOfRange = errors.New("wrap to address must be less than 32")
+
 func (sm *SM) SetWrapToAddress(wrapToAddress uint) error {
-	return errors.New("unimplemented: SetWrapToAddress")
+	if wrapToAddress > 31 {
+		return ErrSMSetWrapToAddressOutOfRange
+	}
+	sm.wrapToAddress = wrapToAddress
+	return nil
 }
 
-// TODO: Implement Configurator and Controller
+func (sm *SM) SetStatusValueUsesRXFIFO(statusValueUsesRXFIFO bool) {
+	sm.statusValueUsesRXFIFO = statusValueUsesRXFIFO
+}
 
-func (sm *SM) SetStatusValueUsesRXFIFO(statusValueUsesRXFIFO bool)           {}
-func (sm *SM) SetStatusValueComparisonLevel(statusValueComparisonLevel uint) {}
-func (sm *SM) SetPullThreshold(pullThreshold uint)                           {}
-func (sm *SM) SetPushThreshold(pushThreshold uint)                           {}
-func (sm *SM) SetOutShiftMovesRight(outShiftMovesRight bool)                 {}
-func (sm *SM) SetInShiftMovesRight(inShiftMovesRight bool)                   {}
-func (sm *SM) SetAutopullEnabled(autopullEnabled bool)                       {}
-func (sm *SM) SetAutopushEnabled(autopushEnabled bool)                       {}
+var ErrSMSetStatusValueComparisonLevelOutOfRange = errors.New("status value comparison level must be less than 16")
 
-func (sm *SM) SetSidesetBasePin(sidesetBasePin uint)   {}
-func (sm *SM) SetSidesetBitCount(sidesetBitCount uint) {}
-func (sm *SM) SetBaseSetPin(baseSetPin uint)           {}
-func (sm *SM) SetPinCountSet(pinCountSet uint)         {}
-func (sm *SM) SetBaseInPin(baseInPin uint)             {}
-func (sm *SM) SetBaseOutPin(baseOutPin uint)           {}
-func (sm *SM) SetPinCountOut(pinCountOut uint)         {}
-func (sm *SM) SetJumpPin(jumpPin uint)                 {}
+func (sm *SM) SetStatusValueComparisonLevel(statusValueComparisonLevel uint) error {
+	if statusValueComparisonLevel > 15 {
+		return ErrSMSetStatusValueComparisonLevelOutOfRange
+	}
+	sm.statusValueComparisonLevel = statusValueComparisonLevel
+	return nil
+}
 
-func (sm *SM) SetFIFORXJoin(fifoRXJoin bool) {}
-func (sm *SM) SetFIFOTXJoin(fifoTXJoin bool) {}
+var ErrSMSetPullThresholdOutOfRange = errors.New("pull threshold must be less than 32")
 
-func (sm *SM) ForceInstruction(forcedInstruction uint16) {}
+func (sm *SM) SetPullThreshold(pullThreshold uint) error {
+	if pullThreshold > 31 {
+		return ErrSMSetPullThresholdOutOfRange
+	}
+	sm.pullThreshold = pullThreshold
+	return nil
+}
+
+var ErrSMSetPushThresholdOutOfRange = errors.New("push threshold must be less than 32")
+
+func (sm *SM) SetPushThreshold(pushThreshold uint) error {
+	if pushThreshold > 31 {
+		return ErrSMSetPushThresholdOutOfRange
+	}
+	sm.pushThreshold = pushThreshold
+	return nil
+}
+func (sm *SM) SetOutShiftMovesRight(outShiftMovesRight bool) {
+	sm.outShiftMovesRight = outShiftMovesRight
+}
+func (sm *SM) SetInShiftMovesRight(inShiftMovesRight bool) {
+	sm.inShiftMovesRight = inShiftMovesRight
+}
+func (sm *SM) SetAutopullEnabled(autopullEnabled bool) {
+	sm.autopullEnabled = autopullEnabled
+}
+func (sm *SM) SetAutopushEnabled(autopushEnabled bool) {
+	sm.autopushEnabled = autopushEnabled
+}
+
+var ErrSMSetBaseSidesetPinOutOfRange = errors.New("base sideset pin must be less than 32")
+
+func (sm *SM) SetBaseSidesetPin(baseSidesetPin uint) error {
+	if baseSidesetPin > 31 {
+		return ErrSMSetBaseSidesetPinOutOfRange
+	}
+	sm.baseSidesetPin = baseSidesetPin
+	return nil
+}
+
+var ErrSMSetBitCountSidesetOutOfRange = errors.New("sideset bit count must be less than 6")
+
+func (sm *SM) SetBitCountSideset(bitCountSideset uint) error {
+	if bitCountSideset > 5 {
+		return ErrSMSetBitCountSidesetOutOfRange
+	}
+	sm.bitCountSideset = bitCountSideset
+	return nil
+}
+
+var ErrSMSetBaseSetPinOutOfRange = errors.New("base set pin must be less than 32")
+
+func (sm *SM) SetBaseSetPin(baseSetPin uint) error {
+	if baseSetPin > 31 {
+		return ErrSMSetBaseSetPinOutOfRange
+	}
+	sm.baseSetPin = baseSetPin
+	return nil
+}
+
+var ErrSMSetPinCountSetOutOfRange = errors.New("set pin count must be less than 6")
+
+func (sm *SM) SetPinCountSet(pinCountSet uint) error {
+	if pinCountSet > 5 {
+		return ErrSMSetPinCountSetOutOfRange
+	}
+	sm.pinCountSet = pinCountSet
+	return nil
+}
+
+var ErrSMSetBaseInPinOutOfRange = errors.New("base in pin must be less than 32")
+
+func (sm *SM) SetBaseInPin(baseInPin uint) error {
+	if baseInPin > 31 {
+		return ErrSMSetBaseInPinOutOfRange
+	}
+	sm.baseInPin = baseInPin
+	return nil
+}
+
+var ErrSMSetBaseOutPinOutOfRange = errors.New("base out pin must be less than 32")
+
+func (sm *SM) SetBaseOutPin(baseOutPin uint) error {
+	if baseOutPin > 31 {
+		return ErrSMSetBaseOutPinOutOfRange
+	}
+	sm.baseOutPin = baseOutPin
+	return nil
+}
+
+var ErrSMSetPinCountOutOutOfRange = errors.New("out pin count must be less than 6")
+
+func (sm *SM) SetPinCountOut(pinCountOut uint) error {
+	if pinCountOut > 5 {
+		return ErrSMSetPinCountOutOutOfRange
+	}
+	sm.pinCountOut = pinCountOut
+	return nil
+}
+
+var ErrSMSetJumpPinOutOfRange = errors.New("jump pin must be less than 32")
+
+func (sm *SM) SetJumpPin(jumpPin uint) error {
+	if jumpPin > 31 {
+		return ErrSMSetJumpPinOutOfRange
+	}
+	sm.jumpPin = jumpPin
+	return nil
+}
+
+type FIFOJoin uint
+
+const (
+	FIFOJoinNone FIFOJoin = iota
+	FIFOJoinRX
+	FIFOJoinTX
+	FIFODisabled
+)
+
+var ErrSMSetFIFOJoinInvalidJoin = errors.New("invalid FIFO join")
+
+func (sm *SM) SetFIFOJoin(join FIFOJoin) error {
+	switch join {
+	case FIFOJoinNone:
+		sm.fifoRX = fifo.NewFIFO(4)
+		sm.fifoTX = fifo.NewFIFO(4)
+	case FIFOJoinRX:
+		sm.fifoRX = fifo.NewFIFO(8)
+		sm.fifoTX = fifo.NewFIFO(0)
+	case FIFOJoinTX:
+		sm.fifoRX = fifo.NewFIFO(0)
+		sm.fifoTX = fifo.NewFIFO(8)
+	case FIFODisabled:
+		sm.fifoRX = fifo.NewFIFO(0)
+		sm.fifoTX = fifo.NewFIFO(0)
+	default:
+		return ErrSMSetFIFOJoinInvalidJoin
+	}
+	return nil
+}
+
+func (sm *SM) ForceInstruction(forcedInstruction uint16) {
+	sm.forcedInstruction = forcedInstruction
+	sm.newForcedInstruction = true
+}
 
 func (sm *SM) RestartClockDivider() {
 	sm.clockDividerTicksRemaining = 0
@@ -380,13 +542,23 @@ func (sm *SM) SetClockDivisor(divider float32) error {
 	sm.clockDivisorFractional = divFrac
 	return nil
 }
+func (sm *SM) SetClockDivisorInteger(divInt uint16) {
+	sm.clockDivisorInteger = divInt
+}
+func (sm *SM) SetClockDivisorFractional(divFrac uint8) {
+	sm.clockDivisorFractional = divFrac
+}
 
 func (sm *SM) Controller() Controller {
 	return sm
 }
 
-func (sm *SM) SetPinInputs(pinInputs uint32) {}
-func (sm *SM) SetIRQInputs(irqInputs uint8)  {}
+func (sm *SM) SetPinInputs(pinInputs uint32) {
+	sm.pinInputs = pinInputs
+}
+func (sm *SM) SetIRQInputs(irqInputs uint8) {
+	sm.irqInputs = irqInputs
+}
 
 var ErrSMForcedInstructionStalledDuringEXECdInstruction = errors.New("a forced instruction stalled while an EXEC'd instruction was pending, which would've overwritten the EXEC'd instruction")
 
@@ -410,11 +582,11 @@ func (sm *SM) Tick() error {
 		if err != nil {
 			return fmt.Errorf("error executing new forced instruction: %w", err)
 		}
+		sm.forcedInstructionStalled = (sm.stalled || sm.stalledIRQ)
 		if sm.stalled || sm.stalledIRQ {
 			if sm.execdInstructionActive {
 				return ErrSMForcedInstructionStalledDuringEXECdInstruction
 			}
-			sm.forcedInstructionStalled = true
 			sm.latchedInstruction = sm.currentInstruction
 		}
 	} else if sm.forcedInstructionStalled {
@@ -600,6 +772,9 @@ func (sm *SM) incrementProgramCounter() {
 	}
 }
 
+var ErrSMXRegisterNotInitialized = errors.New("X register not initialized")
+var ErrSMYRegisterNotInitialized = errors.New("Y register not initialized")
+
 type jumpCondition uint
 
 const (
@@ -621,16 +796,34 @@ func (sm *SM) executeJump(condition jumpCondition, address uint) error {
 	case jumpAlways:
 		shouldJump = true
 	case jumpXZero:
+		if !sm.xRegisterInitialized {
+			return ErrSMXRegisterNotInitialized
+		}
 		shouldJump = (sm.xRegister == 0)
 	case jumpXNonZeroThenDecrement:
+		if !sm.xRegisterInitialized {
+			return ErrSMXRegisterNotInitialized
+		}
 		shouldJump = (sm.xRegister != 0)
 		sm.xRegister--
 	case jumpYZero:
+		if !sm.yRegisterInitialized {
+			return ErrSMYRegisterNotInitialized
+		}
 		shouldJump = (sm.yRegister == 0)
 	case jumpYNonZeroThenDecrement:
+		if !sm.yRegisterInitialized {
+			return ErrSMYRegisterNotInitialized
+		}
 		shouldJump = (sm.yRegister != 0)
 		sm.yRegister--
 	case jumpXNotEqualY:
+		if !sm.xRegisterInitialized {
+			return ErrSMXRegisterNotInitialized
+		}
+		if !sm.yRegisterInitialized {
+			return ErrSMYRegisterNotInitialized
+		}
 		shouldJump = (sm.xRegister != sm.yRegister)
 	case jumpPin:
 		shouldJump = (sm.pinInputs>>sm.jumpPin)&0b1 == 1
@@ -705,8 +898,14 @@ func (sm *SM) executeIn(source inSource, count uint) error {
 			pinMask := bits.RotateLeft32(mask, -int(sm.baseInPin))
 			data = bits.RotateLeft32(sm.pinInputs&pinMask, -int(sm.baseInPin))
 		case inSourceX:
+			if !sm.xRegisterInitialized {
+				return ErrSMXRegisterNotInitialized
+			}
 			data = (sm.xRegister & mask)
 		case inSourceY:
+			if !sm.yRegisterInitialized {
+				return ErrSMYRegisterNotInitialized
+			}
 			data = (sm.yRegister & mask)
 		case inSourceNull:
 			data = 0
@@ -803,8 +1002,10 @@ func (sm *SM) executeOut(destination outDestination, count uint) error {
 		}
 	case outDestinationX:
 		sm.xRegister = data
+		sm.xRegisterInitialized = true
 	case outDestinationY:
 		sm.yRegister = data
+		sm.yRegisterInitialized = true
 	case outDestinationNull:
 		// discards data
 	case outDestinationPinDirections:
@@ -841,6 +1042,9 @@ func (sm *SM) executePushOrPull(isPull bool, ifThreshold bool, block bool) error
 			sm.outputShiftRegisterCounter = 0
 			sm.stalled = false
 		} else if shouldPull && !block {
+			if !sm.xRegisterInitialized {
+				return ErrSMXRegisterNotInitialized
+			}
 			sm.outputShiftRegister = sm.xRegister
 			sm.outputShiftRegisterCounter = 0
 		}
@@ -896,8 +1100,14 @@ func (sm *SM) executeMove(destination moveDestination, operation moveOperation, 
 	case moveSourcePins:
 		sourceData = bits.RotateLeft32(sm.pinInputs, -int(sm.baseInPin))
 	case moveSourceX:
+		if !sm.xRegisterInitialized {
+			return ErrSMXRegisterNotInitialized
+		}
 		sourceData = sm.xRegister
 	case moveSourceY:
+		if !sm.yRegisterInitialized {
+			return ErrSMYRegisterNotInitialized
+		}
 		sourceData = sm.yRegister
 	case moveSourceNull:
 		sourceData = 0
@@ -950,8 +1160,10 @@ func (sm *SM) executeMove(destination moveDestination, operation moveOperation, 
 		}
 	case moveDestinationX:
 		sm.xRegister = modifiedData
+		sm.xRegisterInitialized = true
 	case moveDestinationY:
 		sm.yRegister = modifiedData
+		sm.yRegisterInitialized = true
 	case moveDestinationEXEC:
 		sm.latchedInstruction = uint16(modifiedData)
 		sm.execdInstructionActive = true
@@ -1025,8 +1237,10 @@ func (sm *SM) executeSet(destination setDestination, data uint) error {
 		sm.pinOutputsMask = pinMask
 	case setDestinationX:
 		sm.xRegister = uint32(data)
+		sm.xRegisterInitialized = true
 	case setDestinationY:
 		sm.yRegister = uint32(data)
+		sm.yRegisterInitialized = true
 	case setDestinationPinDirections:
 		sm.pinOutputEnables = pinData
 		sm.pinOutputEnablesMask = pinMask
