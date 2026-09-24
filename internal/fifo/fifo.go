@@ -37,6 +37,16 @@ func NewFIFO(size uint) *FIFO {
 	return &FIFO{buf: buf}
 }
 
+func (f *FIFO) Resize(size uint) {
+	if size == f.Size() {
+		return
+	}
+	f.buf = make([]uint32, size)
+	f.head = 0
+	f.tail = 0
+	f.level = 0
+}
+
 func (f *FIFO) Observer() Observer {
 	return f
 }

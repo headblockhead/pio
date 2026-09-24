@@ -21,6 +21,8 @@ type Observer interface {
 	PinOutputEnablesMask() uint32
 	PinOutputs() uint32
 	PinOutputsMask() uint32
+	PinSidesets() uint32
+	PinSidesetsMask() uint32
 	IRQWrites() uint8
 	IRQWritesMask() uint8
 
@@ -220,6 +222,8 @@ func NewSM(index uint, memoryReader memory.MemoryReader) *SM {
 		fifoTX:       fifo.NewFIFO(4),
 
 		wrapFromAddress:            31,
+		pullThreshold:              32,
+		pushThreshold:              32,
 		pinCountSet:                5,
 		outputShiftRegisterCounter: 32,
 		outShiftMovesRight:         true,
@@ -244,6 +248,8 @@ func (sm *SM) PinOutputEnables() uint32     { return sm.pinOutputEnables }
 func (sm *SM) PinOutputEnablesMask() uint32 { return sm.pinOutputEnablesMask }
 func (sm *SM) PinOutputs() uint32           { return sm.pinOutputs }
 func (sm *SM) PinOutputsMask() uint32       { return sm.pinOutputsMask }
+func (sm *SM) PinSidesets() uint32          { return sm.pinSidesets }
+func (sm *SM) PinSidesetsMask() uint32      { return sm.pinSidesetsMask }
 func (sm *SM) IRQWrites() uint8             { return sm.irqWrites }
 func (sm *SM) IRQWritesMask() uint8         { return sm.irqWritesMask }
 
@@ -381,20 +387,20 @@ func (sm *SM) SetStatusValueComparisonLevel(statusValueComparisonLevel uint) err
 	return nil
 }
 
-var ErrSMSetPullThresholdOutOfRange = errors.New("pull threshold must be less than 32")
+var ErrSMSetPullThresholdOutOfRange = errors.New("pull threshold must be in the range 1 to 32")
 
 func (sm *SM) SetPullThreshold(pullThreshold uint) error {
-	if pullThreshold > 31 {
+	if pullThreshold > 32 || pullThreshold < 1 {
 		return ErrSMSetPullThresholdOutOfRange
 	}
 	sm.pullThreshold = pullThreshold
 	return nil
 }
 
-var ErrSMSetPushThresholdOutOfRange = errors.New("push threshold must be less than 32")
+var ErrSMSetPushThresholdOutOfRange = errors.New("push threshold must be in the range 1 to 32")
 
 func (sm *SM) SetPushThreshold(pushThreshold uint) error {
-	if pushThreshold > 31 {
+	if pushThreshold > 32 || pushThreshold < 1 {
 		return ErrSMSetPushThresholdOutOfRange
 	}
 	sm.pushThreshold = pushThreshold
@@ -473,10 +479,10 @@ func (sm *SM) SetBaseOutPin(baseOutPin uint) error {
 	return nil
 }
 
-var ErrSMSetPinCountOutOutOfRange = errors.New("out pin count must be less than 6")
+var ErrSMSetPinCountOutOutOfRange = errors.New("out pin count must be less than 33")
 
 func (sm *SM) SetPinCountOut(pinCountOut uint) error {
-	if pinCountOut > 5 {
+	if pinCountOut > 32 {
 		return ErrSMSetPinCountOutOutOfRange
 	}
 	sm.pinCountOut = pinCountOut
@@ -499,7 +505,7 @@ const (
 	FIFOJoinNone FIFOJoin = iota
 	FIFOJoinRX
 	FIFOJoinTX
-	FIFODisabled
+	FIFOJoinDisabled
 )
 
 var ErrSMSetFIFOJoinInvalidJoin = errors.New("invalid FIFO join")
@@ -507,17 +513,17 @@ var ErrSMSetFIFOJoinInvalidJoin = errors.New("invalid FIFO join")
 func (sm *SM) SetFIFOJoin(join FIFOJoin) error {
 	switch join {
 	case FIFOJoinNone:
-		sm.fifoRX = fifo.NewFIFO(4)
-		sm.fifoTX = fifo.NewFIFO(4)
+		sm.fifoRX.Resize(4)
+		sm.fifoTX.Resize(4)
 	case FIFOJoinRX:
-		sm.fifoRX = fifo.NewFIFO(8)
-		sm.fifoTX = fifo.NewFIFO(0)
+		sm.fifoRX.Resize(8)
+		sm.fifoTX.Resize(0)
 	case FIFOJoinTX:
-		sm.fifoRX = fifo.NewFIFO(0)
-		sm.fifoTX = fifo.NewFIFO(8)
-	case FIFODisabled:
-		sm.fifoRX = fifo.NewFIFO(0)
-		sm.fifoTX = fifo.NewFIFO(0)
+		sm.fifoRX.Resize(0)
+		sm.fifoTX.Resize(8)
+	case FIFOJoinDisabled:
+		sm.fifoRX.Resize(0)
+		sm.fifoTX.Resize(0)
 	default:
 		return ErrSMSetFIFOJoinInvalidJoin
 	}
@@ -614,12 +620,15 @@ func (sm *SM) Tick() error {
 
 func (sm *SM) dividedTick() error {
 	if sm.execdInstructionActive {
+		sm.execdInstructionActive = false
 		sm.currentInstruction = sm.latchedInstruction
 		err := sm.execute()
 		if err != nil {
 			return fmt.Errorf("error executing EXEC'd instruction: %w", err)
 		}
-		sm.execdInstructionActive = sm.stalled || sm.stalledIRQ
+		if !sm.execdInstructionActive {
+			sm.execdInstructionActive = sm.stalled || sm.stalledIRQ
+		}
 	} else if sm.stalled || sm.stalledIRQ {
 		err := sm.fetch()
 		if err != nil {
@@ -651,11 +660,11 @@ func (sm *SM) dividedTick() error {
 }
 
 func (sm *SM) fetch() error {
-	instruction, err := sm.memoryReader.Read(sm.programCounter)
+	instr, err := sm.memoryReader.Read(sm.programCounter)
 	if err != nil {
 		return fmt.Errorf("error reading instruction memory: %w", err)
 	}
-	sm.currentInstruction = instruction
+	sm.currentInstruction = instr
 	return nil
 }
 
@@ -684,7 +693,7 @@ func (sm *SM) execute() error {
 		address := uint(sm.currentInstruction & 0b11111)
 		err := sm.executeJump(condition, address)
 		if err != nil {
-			return fmt.Errorf("error excecuting jump: %w", err)
+			return fmt.Errorf("error executing jump: %w", err)
 		}
 	case instructionWait:
 		polarity := (sm.currentInstruction>>7)&0b1 == 1
@@ -692,7 +701,7 @@ func (sm *SM) execute() error {
 		index := uint(sm.currentInstruction & 0b11111)
 		err := sm.executeWait(polarity, source, index)
 		if err != nil {
-			return fmt.Errorf("error excecuting wait: %w", err)
+			return fmt.Errorf("error executing wait: %w", err)
 		}
 	case instructionIn:
 		source := inSource((sm.currentInstruction >> 5) & 0b111)
@@ -702,7 +711,7 @@ func (sm *SM) execute() error {
 		}
 		err := sm.executeIn(source, numberOfBits)
 		if err != nil {
-			return fmt.Errorf("error excecuting in: %w", err)
+			return fmt.Errorf("error executing in: %w", err)
 		}
 	case instructionOut:
 		destination := outDestination((sm.currentInstruction >> 5) & 0b111)
@@ -712,7 +721,7 @@ func (sm *SM) execute() error {
 		}
 		err := sm.executeOut(destination, numberOfBits)
 		if err != nil {
-			return fmt.Errorf("error excecuting out: %w", err)
+			return fmt.Errorf("error executing out: %w", err)
 		}
 	case instructionPushPull:
 		isPull := (sm.currentInstruction>>7)&0b1 == 1
@@ -720,7 +729,7 @@ func (sm *SM) execute() error {
 		block := (sm.currentInstruction>>5)&0b1 == 1
 		err := sm.executePushOrPull(isPull, ifThreshold, block)
 		if err != nil {
-			return fmt.Errorf("error excecuting push/pull: %w", err)
+			return fmt.Errorf("error executing push/pull: %w", err)
 		}
 	case instructionMove:
 		destination := moveDestination((sm.currentInstruction >> 5) & 0b111)
@@ -728,7 +737,7 @@ func (sm *SM) execute() error {
 		source := moveSource(sm.currentInstruction & 0b111)
 		err := sm.executeMove(destination, operation, source)
 		if err != nil {
-			return fmt.Errorf("error excecuting move: %w", err)
+			return fmt.Errorf("error executing move: %w", err)
 		}
 	case instructionIRQ:
 		clearIRQ := (sm.currentInstruction>>6)&0b1 == 1
@@ -736,14 +745,14 @@ func (sm *SM) execute() error {
 		index := uint(sm.currentInstruction & 0b11111)
 		err := sm.executeIRQ(clearIRQ, waitIRQ, index)
 		if err != nil {
-			return fmt.Errorf("error excecuting irq: %w", err)
+			return fmt.Errorf("error executing irq: %w", err)
 		}
 	case instructionSet:
 		destination := setDestination((sm.currentInstruction >> 5) & 0b111)
 		data := uint(sm.currentInstruction & 0b11111)
 		err := sm.executeSet(destination, data)
 		if err != nil {
-			return fmt.Errorf("error excecuting set: %w", err)
+			return fmt.Errorf("error executing set: %w", err)
 		}
 	default:
 		return ErrSMInvalidInstructionType
@@ -858,7 +867,7 @@ func (sm *SM) executeWait(polarity bool, source waitSource, index uint) error {
 		sm.stalled = ((sm.pinInputs>>pin)&0b1 == 1) == polarity
 	case waitSourceIRQ:
 		relative := (index>>4)&0b1 == 1
-		irq := index
+		irq := index & 0b111
 		if relative {
 			upperBit := irq & 0b100
 			lowerBits := (irq + sm.index) & 0b011
@@ -895,8 +904,7 @@ func (sm *SM) executeIn(source inSource, count uint) error {
 		var mask uint32 = (0b1 << count) - 1
 		switch source {
 		case inSourcePins:
-			pinMask := bits.RotateLeft32(mask, -int(sm.baseInPin))
-			data = bits.RotateLeft32(sm.pinInputs&pinMask, -int(sm.baseInPin))
+			data = bits.RotateLeft32(sm.pinInputs, -int(sm.baseInPin)) & mask
 		case inSourceX:
 			if !sm.xRegisterInitialized {
 				return ErrSMXRegisterNotInitialized
@@ -924,6 +932,9 @@ func (sm *SM) executeIn(source inSource, count uint) error {
 			sm.inputShiftRegister |= data
 		}
 		sm.inputShiftRegisterCounter += count
+		if sm.inputShiftRegisterCounter > 32 {
+			sm.inputShiftRegisterCounter = 32
+		}
 	}
 	sm.stalled = false
 	if sm.autopushEnabled && sm.inputShiftRegisterCounter >= sm.pushThreshold {
@@ -943,14 +954,14 @@ func (sm *SM) executeIn(source inSource, count uint) error {
 type outDestination uint
 
 const (
-	outDestinationPins               = 0b000
-	outDestinationX                  = 0b001
-	outDestinationY                  = 0b010
-	outDestinationNull               = 0b011
-	outDestinationPinDirections      = 0b100
-	outDestinationProgramCounter     = 0b101
-	outDestinationInputShiftRegister = 0b110
-	outDestinationEXEC               = 0b111
+	outDestinationPins               outDestination = 0b000
+	outDestinationX                  outDestination = 0b001
+	outDestinationY                  outDestination = 0b010
+	outDestinationNull               outDestination = 0b011
+	outDestinationPinDirections      outDestination = 0b100
+	outDestinationProgramCounter     outDestination = 0b101
+	outDestinationInputShiftRegister outDestination = 0b110
+	outDestinationEXEC               outDestination = 0b111
 )
 
 var ErrSMOutInvalidDestination = errors.New("invalid out destination")
@@ -985,14 +996,23 @@ func (sm *SM) executeOut(destination outDestination, count uint) error {
 		sm.outputShiftRegister <<= count
 	}
 	sm.outputShiftRegisterCounter += count
+	if sm.outputShiftRegisterCounter > 32 {
+		sm.outputShiftRegisterCounter = 32
+	}
 
 	writePins := true
 	if sm.outWriteEnableUsed {
 		writePins = ((data >> sm.outWriteEnableBitIndex) & 0b1) == 1
+		if !writePins {
+			sm.pinOutputEnables = 0
+			sm.pinOutputEnablesMask = 0
+			sm.pinOutputs = 0
+			sm.pinOutputsMask = 0
+		}
 	}
 
-	var pinData uint32 = bits.RotateLeft32(data, -int(sm.baseOutPin))
-	var pinMask uint32 = bits.RotateLeft32((0b1<<sm.pinCountOut)-1, -int(sm.baseOutPin))
+	var pinData uint32 = bits.RotateLeft32(data, int(sm.baseOutPin))
+	var pinMask uint32 = bits.RotateLeft32((0b1<<sm.pinCountOut)-1, int(sm.baseOutPin))
 
 	switch destination {
 	case outDestinationPins:
@@ -1051,10 +1071,12 @@ func (sm *SM) executePushOrPull(isPull bool, ifThreshold bool, block bool) error
 	} else {
 		shouldPush := !ifThreshold || (sm.inputShiftRegisterCounter >= sm.pushThreshold)
 		sm.stalled = block && shouldPush && sm.fifoRX.IsFull()
-		if shouldPush && !sm.fifoRX.IsFull() {
-			err := sm.fifoRX.Write(sm.inputShiftRegister)
-			if err != nil {
-				return fmt.Errorf("error writing RX FIFO for autopush: %w", err)
+		if shouldPush {
+			if !sm.fifoRX.IsFull() {
+				err := sm.fifoRX.Write(sm.inputShiftRegister)
+				if err != nil {
+					return fmt.Errorf("error writing RX FIFO for autopush: %w", err)
+				}
 			}
 			sm.inputShiftRegister = 0
 			sm.inputShiftRegisterCounter = 0
@@ -1155,8 +1177,8 @@ func (sm *SM) executeMove(destination moveDestination, operation moveOperation, 
 	switch destination {
 	case moveDestinationPins:
 		if writePins {
-			sm.pinOutputs = bits.RotateLeft32(modifiedData, -int(sm.baseOutPin))
-			sm.pinOutputsMask = 0xFFFFFFFF
+			sm.pinOutputsMask = bits.RotateLeft32((0b1<<sm.pinCountOut)-1, int(sm.baseOutPin))
+			sm.pinOutputs = bits.RotateLeft32(modifiedData, int(sm.baseOutPin))
 		}
 	case moveDestinationX:
 		sm.xRegister = modifiedData
@@ -1187,7 +1209,7 @@ var ErrSMIRQClearWaitDisallowed = errors.New("cannot clear and wait at the same 
 
 func (sm *SM) executeIRQ(clearIRQ bool, waitIRQ bool, index uint) error {
 	relative := (index>>4)&0b1 == 1
-	irq := index
+	irq := index & 0b111
 	if relative {
 		upperBit := irq & 0b100
 		lowerBits := (irq + sm.index) & 0b011
@@ -1229,8 +1251,8 @@ const (
 var ErrSMSetInvalidDestination = errors.New("invalid destination")
 
 func (sm *SM) executeSet(destination setDestination, data uint) error {
-	var pinData uint32 = bits.RotateLeft32(uint32(data), -int(sm.baseSetPin))
-	var pinMask uint32 = bits.RotateLeft32((0b1<<sm.pinCountSet)-1, -int(sm.baseSetPin))
+	var pinData uint32 = bits.RotateLeft32(uint32(data), int(sm.baseSetPin))
+	var pinMask uint32 = bits.RotateLeft32((0b1<<sm.pinCountSet)-1, int(sm.baseSetPin))
 	switch destination {
 	case setDestinationPins:
 		sm.pinOutputs = pinData
