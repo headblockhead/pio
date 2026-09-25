@@ -59,9 +59,8 @@ type Observer interface {
 	StalledIRQ() bool
 	Jumped() bool
 	DelaysRemaining() uint
-	NewForcedInstruction() bool
+	ForcedInstructionActive() bool
 	ForcedInstruction() uint16
-	ForcedInstructionStalled() bool
 	ExecdInstructionActive() bool
 	LatchedInstruction() uint16
 
@@ -75,7 +74,7 @@ type Observer interface {
 	YRegisterInitialized() bool
 
 	ClockDivisor() float32
-	ClockDivisorInteger() uint16
+	ClockDivisorInteger() uint
 	ClockDivisorFractional() uint8
 
 	ClockDividerTicksRemaining() uint
@@ -120,7 +119,7 @@ type Configurator interface {
 
 	RestartClockDivider()
 	SetClockDivisor(float32) error
-	SetClockDivisorInteger(uint16)
+	SetClockDivisorInteger(uint) error
 	SetClockDivisorFractional(uint8)
 }
 
@@ -185,17 +184,16 @@ type SM struct {
 	pinCountOut     uint
 	jumpPin         uint
 
-	programCounter           uint
-	currentInstruction       uint16
-	stalled                  bool
-	stalledIRQ               bool
-	jumped                   bool
-	delaysRemaining          uint
-	newForcedInstruction     bool
-	forcedInstruction        uint16
-	forcedInstructionStalled bool
-	execdInstructionActive   bool
-	latchedInstruction       uint16
+	programCounter          uint
+	currentInstruction      uint16
+	stalled                 bool
+	stalledIRQ              bool
+	jumped                  bool
+	delaysRemaining         uint
+	forcedInstructionActive bool
+	forcedInstruction       uint16
+	execdInstructionActive  bool
+	latchedInstruction      uint16
 
 	outputShiftRegister        uint32
 	outputShiftRegisterCounter uint
@@ -280,17 +278,16 @@ func (sm *SM) BaseOutPin() uint      { return sm.baseOutPin }
 func (sm *SM) PinCountOut() uint     { return sm.pinCountOut }
 func (sm *SM) JumpPin() uint         { return sm.jumpPin }
 
-func (sm *SM) ProgramCounter() uint           { return sm.programCounter }
-func (sm *SM) CurrentInstruction() uint16     { return sm.currentInstruction }
-func (sm *SM) Stalled() bool                  { return sm.stalled }
-func (sm *SM) StalledIRQ() bool               { return sm.stalledIRQ }
-func (sm *SM) Jumped() bool                   { return sm.jumped }
-func (sm *SM) DelaysRemaining() uint          { return sm.delaysRemaining }
-func (sm *SM) NewForcedInstruction() bool     { return sm.newForcedInstruction }
-func (sm *SM) ForcedInstruction() uint16      { return sm.forcedInstruction }
-func (sm *SM) ForcedInstructionStalled() bool { return sm.forcedInstructionStalled }
-func (sm *SM) ExecdInstructionActive() bool   { return sm.execdInstructionActive }
-func (sm *SM) LatchedInstruction() uint16     { return sm.latchedInstruction }
+func (sm *SM) ProgramCounter() uint          { return sm.programCounter }
+func (sm *SM) CurrentInstruction() uint16    { return sm.currentInstruction }
+func (sm *SM) Stalled() bool                 { return sm.stalled }
+func (sm *SM) StalledIRQ() bool              { return sm.stalledIRQ }
+func (sm *SM) Jumped() bool                  { return sm.jumped }
+func (sm *SM) DelaysRemaining() uint         { return sm.delaysRemaining }
+func (sm *SM) ForcedInstructionActive() bool { return sm.forcedInstructionActive }
+func (sm *SM) ForcedInstruction() uint16     { return sm.forcedInstruction }
+func (sm *SM) ExecdInstructionActive() bool  { return sm.execdInstructionActive }
+func (sm *SM) LatchedInstruction() uint16    { return sm.latchedInstruction }
 
 func (sm *SM) OutputShiftRegister() uint32      { return sm.outputShiftRegister }
 func (sm *SM) OutputShiftRegisterCounter() uint { return sm.outputShiftRegisterCounter }
@@ -304,7 +301,13 @@ func (sm *SM) YRegisterInitialized() bool       { return sm.yRegisterInitialized
 func (sm *SM) ClockDivisor() float32 {
 	return clockDivisorToFloat32(sm.clockDivisorInteger, sm.clockDivisorFractional)
 }
-func (sm *SM) ClockDivisorInteger() uint16            { return sm.clockDivisorInteger }
+func (sm *SM) ClockDivisorInteger() uint {
+	if sm.clockDivisorInteger == 0 {
+		return 65536
+	} else {
+		return uint(sm.clockDivisorInteger)
+	}
+}
 func (sm *SM) ClockDivisorFractional() uint8          { return sm.clockDivisorFractional }
 func (sm *SM) ClockDividerTicksRemaining() uint       { return sm.clockDividerTicksRemaining }
 func (sm *SM) ClockDividerFractionAccumulator() uint8 { return sm.clockDividerFractionAccumulator }
@@ -319,7 +322,7 @@ func (sm *SM) Restart() {
 	sm.inputShiftRegister = 0
 	sm.delaysRemaining = 0
 	sm.stalledIRQ = false
-	sm.forcedInstructionStalled = false
+	sm.forcedInstructionActive = false
 	sm.execdInstructionActive = false
 	sm.latchedInstruction = 0
 	sm.pinOutputEnables = 0
@@ -532,7 +535,7 @@ func (sm *SM) SetFIFOJoin(join FIFOJoin) error {
 
 func (sm *SM) ForceInstruction(forcedInstruction uint16) {
 	sm.forcedInstruction = forcedInstruction
-	sm.newForcedInstruction = true
+	sm.forcedInstructionActive = true
 }
 
 func (sm *SM) RestartClockDivider() {
@@ -548,8 +551,19 @@ func (sm *SM) SetClockDivisor(divider float32) error {
 	sm.clockDivisorFractional = divFrac
 	return nil
 }
-func (sm *SM) SetClockDivisorInteger(divInt uint16) {
-	sm.clockDivisorInteger = divInt
+
+var ErrSMSetClockDivisorIntegerOutOfRange = errors.New("clock divisor integer must be in the range 1 to 65536")
+
+func (sm *SM) SetClockDivisorInteger(divInt uint) error {
+	if divInt < 1 || divInt > 65536 {
+		return ErrSMSetClockDivisorIntegerOutOfRange
+	}
+	if divInt == 65536 {
+		sm.clockDivisorInteger = 0
+	} else {
+		sm.clockDivisorInteger = uint16(divInt)
+	}
+	return nil
 }
 func (sm *SM) SetClockDivisorFractional(divFrac uint8) {
 	sm.clockDivisorFractional = divFrac
@@ -581,27 +595,21 @@ func (sm *SM) Tick() error {
 	sm.irqWritesMask = 0
 	sm.currentInstruction = 0
 
-	if sm.newForcedInstruction {
+	if sm.forcedInstructionActive {
 		sm.currentInstruction = sm.forcedInstruction
-		sm.newForcedInstruction = false
 		err := sm.execute()
 		if err != nil {
-			return fmt.Errorf("error executing new forced instruction: %w", err)
+			return fmt.Errorf("error executing forced instruction: %w", err)
 		}
-		sm.forcedInstructionStalled = (sm.stalled || sm.stalledIRQ)
 		if sm.stalled || sm.stalledIRQ {
 			if sm.execdInstructionActive {
 				return ErrSMForcedInstructionStalledDuringEXECdInstruction
 			}
+			sm.forcedInstructionActive = true
 			sm.latchedInstruction = sm.currentInstruction
+		} else {
+			sm.forcedInstructionActive = false
 		}
-	} else if sm.forcedInstructionStalled {
-		sm.currentInstruction = sm.latchedInstruction
-		err := sm.execute()
-		if err != nil {
-			return fmt.Errorf("error executing stalled forced instruction: %w", err)
-		}
-		sm.forcedInstructionStalled = (sm.stalled || sm.stalledIRQ)
 	} else if sm.clockDividerTicksRemaining == 0 && sm.enabled {
 		err := sm.dividedTick()
 		if err != nil {
@@ -768,7 +776,31 @@ func (sm *SM) execute() error {
 	}
 
 	delaySidesetData := (sm.currentInstruction >> 8) & 0b11111
-	sm.pinSidesets, sm.pinSidesetsMask, sm.delaysRemaining = delaySidesetUpdate(sm.sidesetIsOptional, sm.baseSidesetPin, sm.bitCountSideset, delaySidesetData)
+
+	var delayMask uint16 = (0b1 << (5 - sm.bitCountSideset)) - 1
+	var sidesetMask = ^delayMask
+	if sm.sidesetIsOptional {
+		sidesetMask &= 0b01111
+	}
+
+	doSideset := (sm.bitCountSideset > 0) && (!sm.sidesetIsOptional || ((delaySidesetData>>4)&0b1 == 1))
+	if doSideset {
+		sidesetData := (delaySidesetData & sidesetMask) >> (5 - sm.bitCountSideset)
+		pinCount := sm.bitCountSideset
+		if sm.sidesetIsOptional {
+			pinCount -= 1
+		}
+		var pinData uint32 = bits.RotateLeft32(uint32(sidesetData), -int(sm.baseSidesetPin))
+		var pinMask uint32 = bits.RotateLeft32((0b1<<pinCount)-1, -int(sm.baseSidesetPin))
+		sm.pinSidesets = pinData
+		sm.pinSidesetsMask = pinMask
+	}
+
+	doDelay := (sm.bitCountSideset < 5) && !sm.forcedInstructionActive
+	if doDelay {
+		delayData := (delaySidesetData & delayMask)
+		sm.delaysRemaining = uint(delayData)
+	}
 
 	return nil
 }
@@ -861,10 +893,10 @@ var ErrSMWaitInvalidSource = errors.New("invalid source")
 func (sm *SM) executeWait(polarity bool, source waitSource, index uint) error {
 	switch source {
 	case waitSourceGPIO:
-		sm.stalled = ((sm.pinInputs>>index)&0b1 == 1) == polarity
+		sm.stalled = ((sm.pinInputs>>index)&0b1 == 1) != polarity
 	case waitSourcePin:
 		pin := (sm.baseInPin + index) % 32
-		sm.stalled = ((sm.pinInputs>>pin)&0b1 == 1) == polarity
+		sm.stalled = ((sm.pinInputs>>pin)&0b1 == 1) != polarity
 	case waitSourceIRQ:
 		relative := (index>>4)&0b1 == 1
 		irq := index & 0b111
@@ -873,7 +905,7 @@ func (sm *SM) executeWait(polarity bool, source waitSource, index uint) error {
 			lowerBits := (irq + sm.index) & 0b011
 			irq = upperBit | lowerBits
 		}
-		sm.stalled = ((sm.irqInputs>>irq)&0b1 == 1) == polarity
+		sm.stalled = ((sm.irqInputs>>irq)&0b1 == 1) != polarity
 		if polarity == true && !sm.stalled {
 			var clearIRQMask uint8 = (0b1 << irq)
 			sm.irqWrites &= ^clearIRQMask
@@ -938,14 +970,15 @@ func (sm *SM) executeIn(source inSource, count uint) error {
 	}
 	sm.stalled = false
 	if sm.autopushEnabled && sm.inputShiftRegisterCounter >= sm.pushThreshold {
-		sm.stalled = sm.fifoRX.IsFull()
-		if !sm.stalled {
+		if !sm.fifoRX.IsFull() {
 			err := sm.fifoRX.Write(sm.inputShiftRegister)
 			if err != nil {
 				return fmt.Errorf("error writing RX FIFO for autopush: %w", err)
 			}
 			sm.inputShiftRegister = 0
 			sm.inputShiftRegisterCounter = 0
+		} else {
+			sm.stalled = true
 		}
 	}
 	return nil
@@ -1070,16 +1103,19 @@ func (sm *SM) executePushOrPull(isPull bool, ifThreshold bool, block bool) error
 		}
 	} else {
 		shouldPush := !ifThreshold || (sm.inputShiftRegisterCounter >= sm.pushThreshold)
-		sm.stalled = block && shouldPush && sm.fifoRX.IsFull()
 		if shouldPush {
 			if !sm.fifoRX.IsFull() {
 				err := sm.fifoRX.Write(sm.inputShiftRegister)
 				if err != nil {
 					return fmt.Errorf("error writing RX FIFO for autopush: %w", err)
 				}
+				sm.inputShiftRegister = 0
+				sm.inputShiftRegisterCounter = 0
+			} else {
+				if block {
+					sm.stalled = true
+				}
 			}
-			sm.inputShiftRegister = 0
-			sm.inputShiftRegisterCounter = 0
 		}
 	}
 	return nil
@@ -1172,6 +1208,12 @@ func (sm *SM) executeMove(destination moveDestination, operation moveOperation, 
 	writePins := true
 	if sm.outWriteEnableUsed {
 		writePins = ((modifiedData >> sm.outWriteEnableBitIndex) & 0b1) == 1
+		if !writePins {
+			sm.pinOutputEnables = 0
+			sm.pinOutputEnablesMask = 0
+			sm.pinOutputs = 0
+			sm.pinOutputsMask = 0
+		}
 	}
 
 	switch destination {
