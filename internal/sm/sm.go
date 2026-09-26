@@ -143,8 +143,8 @@ type SM struct {
 	index uint
 
 	memoryReader memory.MemoryReader
-	fifoRX       *fifo.FIFO
-	fifoTX       *fifo.FIFO
+	fifoRX       fifo.Writer
+	fifoTX       fifo.Reader
 
 	pinInputs uint32
 	irqInputs uint8
