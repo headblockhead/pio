@@ -602,11 +602,11 @@ func (sm *SM) Tick() error {
 	sm.irqWritesMask = 0
 
 	if sm.newForcedInstruction {
-		sm.newForcedInstruction = false
 		jumped, stalled, stalledIRQ, err := sm.execute(sm.forcedInstruction, false)
 		if err != nil {
 			return fmt.Errorf("error executing forced instruction: %w", err)
 		}
+		sm.newForcedInstruction = false
 		sm.jumped = jumped
 		sm.forcedInstructionStalled = stalled || stalledIRQ
 		if sm.forcedInstructionStalled {
@@ -640,11 +640,11 @@ func (sm *SM) Tick() error {
 
 func (sm *SM) dividedTick() error {
 	if sm.newEXECdInstruction {
-		sm.newEXECdInstruction = false
 		jumped, stalled, stalledIRQ, err := sm.execute(sm.latchedInstruction, false)
 		if err != nil {
 			return fmt.Errorf("error executing EXEC'd instruction: %w", err)
 		}
+		sm.newEXECdInstruction = false
 		sm.jumped = jumped
 		sm.execdInstructionStalled = stalled || stalledIRQ
 	} else if sm.execdInstructionStalled {
