@@ -54,14 +54,15 @@ type Observer interface {
 	JumpPin() uint
 
 	ProgramCounter() uint
-	CurrentInstruction() uint16
 	Stalled() bool
 	StalledIRQ() bool
 	Jumped() bool
 	DelaysRemaining() uint
-	ForcedInstructionActive() bool
+	NewForcedInstruction() bool
 	ForcedInstruction() uint16
-	ExecdInstructionActive() bool
+	ForcedInstructionStalled() bool
+	NewEXECdInstruction() bool
+	EXECdInstructionStalled() bool
 	LatchedInstruction() uint16
 
 	OutputShiftRegister() uint32
@@ -130,6 +131,8 @@ type Controller interface {
 	PinOutputEnablesMask() uint32
 	PinOutputs() uint32
 	PinOutputsMask() uint32
+	PinSidesets() uint32
+	PinSidesetsMask() uint32
 	IRQWrites() uint8
 	IRQWritesMask() uint8
 
@@ -184,16 +187,17 @@ type SM struct {
 	pinCountOut     uint
 	jumpPin         uint
 
-	programCounter          uint
-	currentInstruction      uint16
-	stalled                 bool
-	stalledIRQ              bool
-	jumped                  bool
-	delaysRemaining         uint
-	forcedInstructionActive bool
-	forcedInstruction       uint16
-	execdInstructionActive  bool
-	latchedInstruction      uint16
+	programCounter           uint
+	stalled                  bool
+	stalledIRQ               bool
+	jumped                   bool
+	delaysRemaining          uint
+	newForcedInstruction     bool
+	forcedInstruction        uint16
+	forcedInstructionStalled bool
+	newEXECdInstruction      bool
+	execdInstructionStalled  bool
+	latchedInstruction       uint16
 
 	outputShiftRegister        uint32
 	outputShiftRegisterCounter uint
@@ -278,16 +282,17 @@ func (sm *SM) BaseOutPin() uint      { return sm.baseOutPin }
 func (sm *SM) PinCountOut() uint     { return sm.pinCountOut }
 func (sm *SM) JumpPin() uint         { return sm.jumpPin }
 
-func (sm *SM) ProgramCounter() uint          { return sm.programCounter }
-func (sm *SM) CurrentInstruction() uint16    { return sm.currentInstruction }
-func (sm *SM) Stalled() bool                 { return sm.stalled }
-func (sm *SM) StalledIRQ() bool              { return sm.stalledIRQ }
-func (sm *SM) Jumped() bool                  { return sm.jumped }
-func (sm *SM) DelaysRemaining() uint         { return sm.delaysRemaining }
-func (sm *SM) ForcedInstructionActive() bool { return sm.forcedInstructionActive }
-func (sm *SM) ForcedInstruction() uint16     { return sm.forcedInstruction }
-func (sm *SM) ExecdInstructionActive() bool  { return sm.execdInstructionActive }
-func (sm *SM) LatchedInstruction() uint16    { return sm.latchedInstruction }
+func (sm *SM) ProgramCounter() uint           { return sm.programCounter }
+func (sm *SM) Stalled() bool                  { return sm.stalled }
+func (sm *SM) StalledIRQ() bool               { return sm.stalledIRQ }
+func (sm *SM) Jumped() bool                   { return sm.jumped }
+func (sm *SM) DelaysRemaining() uint          { return sm.delaysRemaining }
+func (sm *SM) NewForcedInstruction() bool     { return sm.newForcedInstruction }
+func (sm *SM) ForcedInstruction() uint16      { return sm.forcedInstruction }
+func (sm *SM) ForcedInstructionStalled() bool { return sm.forcedInstructionStalled }
+func (sm *SM) NewEXECdInstruction() bool      { return sm.newEXECdInstruction }
+func (sm *SM) EXECdInstructionStalled() bool  { return sm.execdInstructionStalled }
+func (sm *SM) LatchedInstruction() uint16     { return sm.latchedInstruction }
 
 func (sm *SM) OutputShiftRegister() uint32      { return sm.outputShiftRegister }
 func (sm *SM) OutputShiftRegisterCounter() uint { return sm.outputShiftRegisterCounter }
@@ -322,8 +327,10 @@ func (sm *SM) Restart() {
 	sm.inputShiftRegister = 0
 	sm.delaysRemaining = 0
 	sm.stalledIRQ = false
-	sm.forcedInstructionActive = false
-	sm.execdInstructionActive = false
+	sm.newForcedInstruction = false
+	sm.forcedInstructionStalled = false
+	sm.newEXECdInstruction = false
+	sm.execdInstructionStalled = false
 	sm.latchedInstruction = 0
 	sm.pinOutputEnables = 0
 	sm.pinOutputEnablesMask = 0
@@ -535,7 +542,7 @@ func (sm *SM) SetFIFOJoin(join FIFOJoin) error {
 
 func (sm *SM) ForceInstruction(forcedInstruction uint16) {
 	sm.forcedInstruction = forcedInstruction
-	sm.forcedInstructionActive = true
+	sm.newForcedInstruction = true
 }
 
 func (sm *SM) RestartClockDivider() {
@@ -593,23 +600,28 @@ func (sm *SM) Tick() error {
 	sm.pinSidesetsMask = 0
 	sm.irqWrites = 0
 	sm.irqWritesMask = 0
-	sm.currentInstruction = 0
 
-	if sm.forcedInstructionActive {
-		sm.currentInstruction = sm.forcedInstruction
-		err := sm.execute()
+	if sm.newForcedInstruction {
+		sm.newForcedInstruction = false
+		jumped, stalled, stalledIRQ, err := sm.execute(sm.forcedInstruction, false)
 		if err != nil {
 			return fmt.Errorf("error executing forced instruction: %w", err)
 		}
-		if sm.stalled || sm.stalledIRQ {
-			if sm.execdInstructionActive {
+		sm.jumped = jumped
+		sm.forcedInstructionStalled = stalled || stalledIRQ
+		if sm.forcedInstructionStalled {
+			if sm.newEXECdInstruction || sm.execdInstructionStalled {
 				return ErrSMForcedInstructionStalledDuringEXECdInstruction
 			}
-			sm.forcedInstructionActive = true
-			sm.latchedInstruction = sm.currentInstruction
-		} else {
-			sm.forcedInstructionActive = false
+			sm.latchedInstruction = sm.forcedInstruction
 		}
+	} else if sm.forcedInstructionStalled {
+		jumped, stalled, stalledIRQ, err := sm.execute(sm.latchedInstruction, true)
+		if err != nil {
+			return fmt.Errorf("error executing stalled forced instruction: %w", err)
+		}
+		sm.jumped = jumped
+		sm.forcedInstructionStalled = stalled || stalledIRQ
 	} else if sm.clockDividerTicksRemaining == 0 && sm.enabled {
 		err := sm.dividedTick()
 		if err != nil {
@@ -627,52 +639,54 @@ func (sm *SM) Tick() error {
 }
 
 func (sm *SM) dividedTick() error {
-	if sm.execdInstructionActive {
-		sm.execdInstructionActive = false
-		sm.currentInstruction = sm.latchedInstruction
-		err := sm.execute()
+	if sm.newEXECdInstruction {
+		sm.newEXECdInstruction = false
+		jumped, stalled, stalledIRQ, err := sm.execute(sm.latchedInstruction, false)
 		if err != nil {
 			return fmt.Errorf("error executing EXEC'd instruction: %w", err)
 		}
-		if !sm.execdInstructionActive {
-			sm.execdInstructionActive = sm.stalled || sm.stalledIRQ
-		}
-	} else if sm.stalled || sm.stalledIRQ {
-		err := sm.fetch()
+		sm.jumped = jumped
+		sm.execdInstructionStalled = stalled || stalledIRQ
+	} else if sm.execdInstructionStalled {
+		jumped, stalled, stalledIRQ, err := sm.execute(sm.latchedInstruction, true)
 		if err != nil {
-			return fmt.Errorf("error fetching stalled instruction: %w", err)
+			return fmt.Errorf("error executing stalled EXEC'd instruction: %w", err)
 		}
-		err = sm.execute()
+		sm.jumped = jumped
+		sm.execdInstructionStalled = stalled || stalledIRQ
+	} else if sm.stalled || sm.stalledIRQ {
+		instr, err := sm.memoryReader.Read(sm.programCounter)
+		if err != nil {
+			return fmt.Errorf("error reading instruction memory: %w", err)
+		}
+		jumped, stalled, stalledIRQ, err := sm.execute(instr, true)
 		if err != nil {
 			return fmt.Errorf("error executing stalled instruction: %w", err)
 		}
-		if !sm.jumped && !(sm.stalled || sm.stalledIRQ) {
+		if !jumped && !(stalled || stalledIRQ) {
 			sm.incrementProgramCounter()
 		}
+		sm.jumped = jumped
+		sm.stalled = stalled
+		sm.stalledIRQ = stalledIRQ
 	} else if sm.delaysRemaining > 0 {
 		sm.delaysRemaining--
 	} else {
-		err := sm.fetch()
+		instr, err := sm.memoryReader.Read(sm.programCounter)
 		if err != nil {
-			return fmt.Errorf("error fetching instruction: %w", err)
+			return fmt.Errorf("error reading instruction memory: %w", err)
 		}
-		err = sm.execute()
+		jumped, stalled, stalledIRQ, err := sm.execute(instr, false)
 		if err != nil {
 			return fmt.Errorf("error executing instruction: %w", err)
 		}
-		if !sm.jumped && !(sm.stalled || sm.stalledIRQ) {
+		if !jumped && !(stalled || stalledIRQ) {
 			sm.incrementProgramCounter()
 		}
+		sm.jumped = jumped
+		sm.stalled = stalled
+		sm.stalledIRQ = stalledIRQ
 	}
-	return nil
-}
-
-func (sm *SM) fetch() error {
-	instr, err := sm.memoryReader.Read(sm.programCounter)
-	if err != nil {
-		return fmt.Errorf("error reading instruction memory: %w", err)
-	}
-	sm.currentInstruction = instr
 	return nil
 }
 
@@ -691,91 +705,90 @@ const (
 
 var ErrSMInvalidInstructionType = errors.New("invalid instruction type")
 
-func (sm *SM) execute() error {
-	instructionType := instruction((sm.currentInstruction >> 13) & 0b111)
-	sm.jumped = false
+func (sm *SM) execute(instr uint16, currentlyStalled bool) (jumped bool, stalled bool, stalledIRQ bool, err error) {
+	instructionType := instruction((instr >> 13) & 0b111)
 
 	switch instructionType {
 	case instructionJump:
-		condition := jumpCondition((sm.currentInstruction >> 5) & 0b111)
-		address := uint(sm.currentInstruction & 0b11111)
-		err := sm.executeJump(condition, address)
+		condition := jumpCondition((instr >> 5) & 0b111)
+		address := uint(instr & 0b11111)
+		jumped, err = sm.executeJump(condition, address)
 		if err != nil {
-			return fmt.Errorf("error executing jump: %w", err)
+			return false, false, false, fmt.Errorf("error executing jump: %w", err)
 		}
 	case instructionWait:
-		polarity := (sm.currentInstruction>>7)&0b1 == 1
-		source := waitSource((sm.currentInstruction >> 5) & 0b11)
-		index := uint(sm.currentInstruction & 0b11111)
-		err := sm.executeWait(polarity, source, index)
+		polarity := (instr>>7)&0b1 == 1
+		source := waitSource((instr >> 5) & 0b11)
+		index := uint(instr & 0b11111)
+		stalled, err = sm.executeWait(polarity, source, index)
 		if err != nil {
-			return fmt.Errorf("error executing wait: %w", err)
+			return false, false, false, fmt.Errorf("error executing wait: %w", err)
 		}
 	case instructionIn:
-		source := inSource((sm.currentInstruction >> 5) & 0b111)
-		numberOfBits := uint(sm.currentInstruction & 0b11111)
+		source := inSource((instr >> 5) & 0b111)
+		numberOfBits := uint(instr & 0b11111)
 		if numberOfBits == 0 {
 			numberOfBits = 32
 		}
-		err := sm.executeIn(source, numberOfBits)
+		stalled, err = sm.executeIn(source, numberOfBits, currentlyStalled)
 		if err != nil {
-			return fmt.Errorf("error executing in: %w", err)
+			return false, false, false, fmt.Errorf("error executing in: %w", err)
 		}
 	case instructionOut:
-		destination := outDestination((sm.currentInstruction >> 5) & 0b111)
-		numberOfBits := uint(sm.currentInstruction & 0b11111)
+		destination := outDestination((instr >> 5) & 0b111)
+		numberOfBits := uint(instr & 0b11111)
 		if numberOfBits == 0 {
 			numberOfBits = 32
 		}
-		err := sm.executeOut(destination, numberOfBits)
+		jumped, stalled, err = sm.executeOut(destination, numberOfBits)
 		if err != nil {
-			return fmt.Errorf("error executing out: %w", err)
+			return false, false, false, fmt.Errorf("error executing out: %w", err)
 		}
 	case instructionPushPull:
-		isPull := (sm.currentInstruction>>7)&0b1 == 1
-		ifThreshold := (sm.currentInstruction>>6)&0b1 == 1
-		block := (sm.currentInstruction>>5)&0b1 == 1
-		err := sm.executePushOrPull(isPull, ifThreshold, block)
+		isPull := (instr>>7)&0b1 == 1
+		ifThreshold := (instr>>6)&0b1 == 1
+		block := (instr>>5)&0b1 == 1
+		stalled, err = sm.executePushOrPull(isPull, ifThreshold, block)
 		if err != nil {
-			return fmt.Errorf("error executing push/pull: %w", err)
+			return false, false, false, fmt.Errorf("error executing push/pull: %w", err)
 		}
 	case instructionMove:
-		destination := moveDestination((sm.currentInstruction >> 5) & 0b111)
-		operation := moveOperation((sm.currentInstruction >> 3) & 0b11)
-		source := moveSource(sm.currentInstruction & 0b111)
-		err := sm.executeMove(destination, operation, source)
+		destination := moveDestination((instr >> 5) & 0b111)
+		operation := moveOperation((instr >> 3) & 0b11)
+		source := moveSource(instr & 0b111)
+		jumped, err = sm.executeMove(destination, operation, source)
 		if err != nil {
-			return fmt.Errorf("error executing move: %w", err)
+			return false, false, false, fmt.Errorf("error executing move: %w", err)
 		}
 	case instructionIRQ:
-		clearIRQ := (sm.currentInstruction>>6)&0b1 == 1
-		waitIRQ := (sm.currentInstruction>>5)&0b1 == 1
-		index := uint(sm.currentInstruction & 0b11111)
-		err := sm.executeIRQ(clearIRQ, waitIRQ, index)
+		clearIRQ := (instr>>6)&0b1 == 1
+		waitIRQ := (instr>>5)&0b1 == 1
+		index := uint(instr & 0b11111)
+		stalledIRQ, err = sm.executeIRQ(clearIRQ, waitIRQ, index, currentlyStalled)
 		if err != nil {
-			return fmt.Errorf("error executing irq: %w", err)
+			return false, false, false, fmt.Errorf("error executing irq: %w", err)
 		}
 	case instructionSet:
-		destination := setDestination((sm.currentInstruction >> 5) & 0b111)
-		data := uint(sm.currentInstruction & 0b11111)
+		destination := setDestination((instr >> 5) & 0b111)
+		data := uint(instr & 0b11111)
 		err := sm.executeSet(destination, data)
 		if err != nil {
-			return fmt.Errorf("error executing set: %w", err)
+			return false, false, false, fmt.Errorf("error executing set: %w", err)
 		}
 	default:
-		return ErrSMInvalidInstructionType
+		return false, false, false, ErrSMInvalidInstructionType
 	}
 
 	if sm.autopullEnabled && sm.outputShiftRegisterCounter >= sm.pullThreshold && !sm.fifoTX.IsEmpty() {
 		osr, err := sm.fifoTX.Read()
 		if err != nil {
-			return fmt.Errorf("error reading TX FIFO for autopull: %w", err)
+			return false, false, false, fmt.Errorf("error reading TX FIFO for autopull: %w", err)
 		}
 		sm.outputShiftRegister = osr
 		sm.outputShiftRegisterCounter = 0
 	}
 
-	delaySidesetData := (sm.currentInstruction >> 8) & 0b11111
+	delaySidesetData := (instr >> 8) & 0b11111
 
 	var delayMask uint16 = (0b1 << (5 - sm.bitCountSideset)) - 1
 	var sidesetMask = ^delayMask
@@ -790,19 +803,21 @@ func (sm *SM) execute() error {
 		if sm.sidesetIsOptional {
 			pinCount -= 1
 		}
-		var pinData uint32 = bits.RotateLeft32(uint32(sidesetData), -int(sm.baseSidesetPin))
-		var pinMask uint32 = bits.RotateLeft32((0b1<<pinCount)-1, -int(sm.baseSidesetPin))
+		var pinData uint32 = bits.RotateLeft32(uint32(sidesetData), int(sm.baseSidesetPin))
+		var pinMask uint32 = bits.RotateLeft32((0b1<<pinCount)-1, int(sm.baseSidesetPin))
 		sm.pinSidesets = pinData
 		sm.pinSidesetsMask = pinMask
 	}
 
-	doDelay := (sm.bitCountSideset < 5) && !sm.forcedInstructionActive
+	doDelay := (sm.bitCountSideset < 5) && !sm.newForcedInstruction
 	if doDelay {
 		delayData := (delaySidesetData & delayMask)
 		sm.delaysRemaining = uint(delayData)
+	} else {
+		sm.delaysRemaining = 0
 	}
 
-	return nil
+	return jumped, stalled, stalledIRQ, nil
 }
 
 func (sm *SM) incrementProgramCounter() {
@@ -831,39 +846,39 @@ const (
 
 var ErrSMJumpInvalidCondition = errors.New("invalid condition")
 
-func (sm *SM) executeJump(condition jumpCondition, address uint) error {
+func (sm *SM) executeJump(condition jumpCondition, address uint) (jumped bool, err error) {
 	var shouldJump bool
 	switch condition {
 	case jumpAlways:
 		shouldJump = true
 	case jumpXZero:
 		if !sm.xRegisterInitialized {
-			return ErrSMXRegisterNotInitialized
+			return false, ErrSMXRegisterNotInitialized
 		}
 		shouldJump = (sm.xRegister == 0)
 	case jumpXNonZeroThenDecrement:
 		if !sm.xRegisterInitialized {
-			return ErrSMXRegisterNotInitialized
+			return false, ErrSMXRegisterNotInitialized
 		}
 		shouldJump = (sm.xRegister != 0)
 		sm.xRegister--
 	case jumpYZero:
 		if !sm.yRegisterInitialized {
-			return ErrSMYRegisterNotInitialized
+			return false, ErrSMYRegisterNotInitialized
 		}
 		shouldJump = (sm.yRegister == 0)
 	case jumpYNonZeroThenDecrement:
 		if !sm.yRegisterInitialized {
-			return ErrSMYRegisterNotInitialized
+			return false, ErrSMYRegisterNotInitialized
 		}
 		shouldJump = (sm.yRegister != 0)
 		sm.yRegister--
 	case jumpXNotEqualY:
 		if !sm.xRegisterInitialized {
-			return ErrSMXRegisterNotInitialized
+			return false, ErrSMXRegisterNotInitialized
 		}
 		if !sm.yRegisterInitialized {
-			return ErrSMYRegisterNotInitialized
+			return false, ErrSMYRegisterNotInitialized
 		}
 		shouldJump = (sm.xRegister != sm.yRegister)
 	case jumpPin:
@@ -871,13 +886,13 @@ func (sm *SM) executeJump(condition jumpCondition, address uint) error {
 	case jumpOSRENotEmpty:
 		shouldJump = (sm.outputShiftRegisterCounter < sm.pullThreshold)
 	default:
-		return ErrSMJumpInvalidCondition
+		return false, ErrSMJumpInvalidCondition
 	}
 	if shouldJump {
 		sm.programCounter = address
-		sm.jumped = true
+		jumped = true
 	}
-	return nil
+	return jumped, nil
 }
 
 type waitSource uint
@@ -890,13 +905,13 @@ const (
 
 var ErrSMWaitInvalidSource = errors.New("invalid source")
 
-func (sm *SM) executeWait(polarity bool, source waitSource, index uint) error {
+func (sm *SM) executeWait(polarity bool, source waitSource, index uint) (stalled bool, err error) {
 	switch source {
 	case waitSourceGPIO:
-		sm.stalled = ((sm.pinInputs>>index)&0b1 == 1) != polarity
+		stalled = ((sm.pinInputs>>index)&0b1 == 1) != polarity
 	case waitSourcePin:
 		pin := (sm.baseInPin + index) % 32
-		sm.stalled = ((sm.pinInputs>>pin)&0b1 == 1) != polarity
+		stalled = ((sm.pinInputs>>pin)&0b1 == 1) != polarity
 	case waitSourceIRQ:
 		relative := (index>>4)&0b1 == 1
 		irq := index & 0b111
@@ -905,16 +920,16 @@ func (sm *SM) executeWait(polarity bool, source waitSource, index uint) error {
 			lowerBits := (irq + sm.index) & 0b011
 			irq = upperBit | lowerBits
 		}
-		sm.stalled = ((sm.irqInputs>>irq)&0b1 == 1) != polarity
-		if polarity == true && !sm.stalled {
+		stalled = ((sm.irqInputs>>irq)&0b1 == 1) != polarity
+		if !stalled && polarity {
 			var clearIRQMask uint8 = (0b1 << irq)
 			sm.irqWrites &= ^clearIRQMask
 			sm.irqWritesMask |= clearIRQMask
 		}
 	default:
-		return ErrSMWaitInvalidSource
+		return false, ErrSMWaitInvalidSource
 	}
-	return nil
+	return stalled, nil
 }
 
 type inSource uint
@@ -930,8 +945,8 @@ const (
 
 var ErrSMInInvalidSource = errors.New("invalid source")
 
-func (sm *SM) executeIn(source inSource, count uint) error {
-	if !sm.stalled {
+func (sm *SM) executeIn(source inSource, count uint, currentlyStalled bool) (stalled bool, err error) {
+	if !currentlyStalled {
 		var data uint32
 		var mask uint32 = (0b1 << count) - 1
 		switch source {
@@ -939,12 +954,12 @@ func (sm *SM) executeIn(source inSource, count uint) error {
 			data = bits.RotateLeft32(sm.pinInputs, -int(sm.baseInPin)) & mask
 		case inSourceX:
 			if !sm.xRegisterInitialized {
-				return ErrSMXRegisterNotInitialized
+				return false, ErrSMXRegisterNotInitialized
 			}
 			data = (sm.xRegister & mask)
 		case inSourceY:
 			if !sm.yRegisterInitialized {
-				return ErrSMYRegisterNotInitialized
+				return false, ErrSMYRegisterNotInitialized
 			}
 			data = (sm.yRegister & mask)
 		case inSourceNull:
@@ -954,7 +969,7 @@ func (sm *SM) executeIn(source inSource, count uint) error {
 		case inSourceOSR:
 			data = (sm.outputShiftRegister & mask)
 		default:
-			return ErrSMInInvalidSource
+			return false, ErrSMInInvalidSource
 		}
 		if sm.inShiftMovesRight {
 			sm.inputShiftRegister >>= count
@@ -968,20 +983,17 @@ func (sm *SM) executeIn(source inSource, count uint) error {
 			sm.inputShiftRegisterCounter = 32
 		}
 	}
-	sm.stalled = false
-	if sm.autopushEnabled && sm.inputShiftRegisterCounter >= sm.pushThreshold {
-		if !sm.fifoRX.IsFull() {
-			err := sm.fifoRX.Write(sm.inputShiftRegister)
-			if err != nil {
-				return fmt.Errorf("error writing RX FIFO for autopush: %w", err)
-			}
-			sm.inputShiftRegister = 0
-			sm.inputShiftRegisterCounter = 0
-		} else {
-			sm.stalled = true
+	shouldPush := sm.autopushEnabled && (sm.inputShiftRegisterCounter >= sm.pushThreshold)
+	stalled = shouldPush && sm.fifoRX.IsFull()
+	if shouldPush && !sm.fifoRX.IsFull() {
+		err := sm.fifoRX.Write(sm.inputShiftRegister)
+		if err != nil {
+			return false, fmt.Errorf("error writing RX FIFO for autopush: %w", err)
 		}
+		sm.inputShiftRegister = 0
+		sm.inputShiftRegisterCounter = 0
 	}
-	return nil
+	return stalled, nil
 }
 
 type outDestination uint
@@ -999,24 +1011,18 @@ const (
 
 var ErrSMOutInvalidDestination = errors.New("invalid out destination")
 
-func (sm *SM) executeOut(destination outDestination, count uint) error {
-	alreadyStalled := sm.stalled
-	sm.stalled = false
-	if sm.autopullEnabled && sm.outputShiftRegisterCounter >= sm.pullThreshold {
+func (sm *SM) executeOut(destination outDestination, count uint) (jumped bool, stalled bool, err error) {
+	shouldPull := sm.autopullEnabled && (sm.outputShiftRegisterCounter >= sm.pullThreshold)
+	if shouldPull {
 		if !sm.fifoTX.IsEmpty() {
 			osr, err := sm.fifoTX.Read()
 			if err != nil {
-				return fmt.Errorf("error reading TX fifo for autopull: %w", err)
+				return false, false, fmt.Errorf("error reading TX fifo for autopull: %w", err)
 			}
 			sm.outputShiftRegister = osr
 			sm.outputShiftRegisterCounter = 0
 		}
-		if !alreadyStalled {
-			sm.stalled = true
-		} else if !sm.fifoTX.IsEmpty() {
-			sm.stalled = false
-		}
-		return nil
+		return false, true, nil
 	}
 
 	var data uint32
@@ -1033,10 +1039,13 @@ func (sm *SM) executeOut(destination outDestination, count uint) error {
 		sm.outputShiftRegisterCounter = 32
 	}
 
+	isPinOperation := destination == outDestinationPins || destination == outDestinationPinDirections
+
+	outWriteEnable := ((data >> sm.outWriteEnableBitIndex) & 0b1) == 1
 	writePins := true
-	if sm.outWriteEnableUsed {
-		writePins = ((data >> sm.outWriteEnableBitIndex) & 0b1) == 1
-		if !writePins {
+	if isPinOperation && sm.outWriteEnableUsed && !outWriteEnable {
+		writePins = false
+		if sm.stickyOutSetAssertionEnabled {
 			sm.pinOutputEnables = 0
 			sm.pinOutputEnablesMask = 0
 			sm.pinOutputs = 0
@@ -1068,57 +1077,51 @@ func (sm *SM) executeOut(destination outDestination, count uint) error {
 		}
 	case outDestinationProgramCounter:
 		sm.programCounter = uint(data % 32)
-		sm.jumped = true
+		jumped = true
 	case outDestinationInputShiftRegister:
 		sm.inputShiftRegister = data
 		sm.inputShiftRegisterCounter = count
 	case outDestinationEXEC:
 		sm.latchedInstruction = uint16(data)
-		sm.execdInstructionActive = true
+		sm.newEXECdInstruction = true
 	default:
-		return ErrSMOutInvalidDestination
+		return false, false, ErrSMOutInvalidDestination
 	}
 
-	return nil
+	return jumped, false, nil
 }
 
-func (sm *SM) executePushOrPull(isPull bool, ifThreshold bool, block bool) error {
+func (sm *SM) executePushOrPull(isPull bool, ifThreshold bool, block bool) (stalled bool, err error) {
 	if isPull {
 		shouldPull := (!ifThreshold && !sm.autopullEnabled) || (sm.outputShiftRegisterCounter >= sm.pullThreshold)
-		sm.stalled = block && shouldPull && sm.fifoTX.IsEmpty()
+		stalled = block && shouldPull && sm.fifoTX.IsEmpty()
 		if shouldPull && !sm.fifoTX.IsEmpty() {
 			osr, err := sm.fifoTX.Read()
 			if err != nil {
-				return fmt.Errorf("error reading TX fifo for pull: %w", err)
+				return false, fmt.Errorf("error reading TX fifo for pull: %w", err)
 			}
 			sm.outputShiftRegister = osr
 			sm.outputShiftRegisterCounter = 0
-			sm.stalled = false
 		} else if shouldPull && !block {
 			if !sm.xRegisterInitialized {
-				return ErrSMXRegisterNotInitialized
+				return false, ErrSMXRegisterNotInitialized
 			}
 			sm.outputShiftRegister = sm.xRegister
 			sm.outputShiftRegisterCounter = 0
 		}
 	} else {
 		shouldPush := !ifThreshold || (sm.inputShiftRegisterCounter >= sm.pushThreshold)
-		if shouldPush {
-			if !sm.fifoRX.IsFull() {
-				err := sm.fifoRX.Write(sm.inputShiftRegister)
-				if err != nil {
-					return fmt.Errorf("error writing RX FIFO for autopush: %w", err)
-				}
-				sm.inputShiftRegister = 0
-				sm.inputShiftRegisterCounter = 0
-			} else {
-				if block {
-					sm.stalled = true
-				}
+		stalled = block && shouldPush && sm.fifoRX.IsFull()
+		if shouldPush && !sm.fifoRX.IsFull() {
+			err := sm.fifoRX.Write(sm.inputShiftRegister)
+			if err != nil {
+				return false, fmt.Errorf("error writing RX FIFO for autopush: %w", err)
 			}
+			sm.inputShiftRegister = 0
+			sm.inputShiftRegisterCounter = 0
 		}
 	}
-	return nil
+	return stalled, nil
 }
 
 type moveDestination uint
@@ -1152,19 +1155,19 @@ var ErrSMMoveSourceOSRDisallowedWhenAutopullEnabled = errors.New("cannot use OSR
 var ErrSMInvalidMoveOperation = errors.New("invalid move operation")
 var ErrSMInvalidMoveDestination = errors.New("invalid move destination")
 
-func (sm *SM) executeMove(destination moveDestination, operation moveOperation, source moveSource) error {
+func (sm *SM) executeMove(destination moveDestination, operation moveOperation, source moveSource) (jumped bool, err error) {
 	var sourceData uint32
 	switch source {
 	case moveSourcePins:
 		sourceData = bits.RotateLeft32(sm.pinInputs, -int(sm.baseInPin))
 	case moveSourceX:
 		if !sm.xRegisterInitialized {
-			return ErrSMXRegisterNotInitialized
+			return false, ErrSMXRegisterNotInitialized
 		}
 		sourceData = sm.xRegister
 	case moveSourceY:
 		if !sm.yRegisterInitialized {
-			return ErrSMYRegisterNotInitialized
+			return false, ErrSMYRegisterNotInitialized
 		}
 		sourceData = sm.yRegister
 	case moveSourceNull:
@@ -1185,12 +1188,12 @@ func (sm *SM) executeMove(destination moveDestination, operation moveOperation, 
 		sourceData = sm.inputShiftRegister
 	case moveSourceOSR:
 		if sm.autopullEnabled {
-			return ErrSMMoveSourceOSRDisallowedWhenAutopullEnabled
+			return false, ErrSMMoveSourceOSRDisallowedWhenAutopullEnabled
 		} else {
 			sourceData = sm.outputShiftRegister
 		}
 	default:
-		return ErrSMInvalidMoveSource
+		return false, ErrSMInvalidMoveSource
 	}
 
 	var modifiedData uint32
@@ -1202,22 +1205,22 @@ func (sm *SM) executeMove(destination moveDestination, operation moveOperation, 
 	case moveOperationBitReverse:
 		modifiedData = bits.Reverse32(sourceData)
 	default:
-		return ErrSMInvalidMoveOperation
-	}
-
-	writePins := true
-	if sm.outWriteEnableUsed {
-		writePins = ((modifiedData >> sm.outWriteEnableBitIndex) & 0b1) == 1
-		if !writePins {
-			sm.pinOutputEnables = 0
-			sm.pinOutputEnablesMask = 0
-			sm.pinOutputs = 0
-			sm.pinOutputsMask = 0
-		}
+		return false, ErrSMInvalidMoveOperation
 	}
 
 	switch destination {
 	case moveDestinationPins:
+		outWriteEnable := ((modifiedData >> sm.outWriteEnableBitIndex) & 0b1) == 1
+		writePins := true
+		if sm.outWriteEnableUsed && !outWriteEnable {
+			writePins = false
+			if sm.stickyOutSetAssertionEnabled {
+				sm.pinOutputEnables = 0
+				sm.pinOutputEnablesMask = 0
+				sm.pinOutputs = 0
+				sm.pinOutputsMask = 0
+			}
+		}
 		if writePins {
 			sm.pinOutputsMask = bits.RotateLeft32((0b1<<sm.pinCountOut)-1, int(sm.baseOutPin))
 			sm.pinOutputs = bits.RotateLeft32(modifiedData, int(sm.baseOutPin))
@@ -1230,10 +1233,10 @@ func (sm *SM) executeMove(destination moveDestination, operation moveOperation, 
 		sm.yRegisterInitialized = true
 	case moveDestinationEXEC:
 		sm.latchedInstruction = uint16(modifiedData)
-		sm.execdInstructionActive = true
+		sm.newEXECdInstruction = true
 	case moveDestinationPC:
 		sm.programCounter = uint(modifiedData % 32)
-		sm.jumped = true
+		jumped = true
 	case moveDestinationISR:
 		sm.inputShiftRegister = modifiedData
 		sm.inputShiftRegisterCounter = 0
@@ -1241,15 +1244,15 @@ func (sm *SM) executeMove(destination moveDestination, operation moveOperation, 
 		sm.outputShiftRegister = modifiedData
 		sm.outputShiftRegisterCounter = 0
 	default:
-		return ErrSMInvalidMoveDestination
+		return false, ErrSMInvalidMoveDestination
 	}
 
-	return nil
+	return jumped, nil
 }
 
-var ErrSMIRQClearWaitDisallowed = errors.New("cannot clear and wait at the same time")
+var ErrSMIRQClearWaitDisallowed = errors.New("malformed instruction, cannot clear and wait at the same time")
 
-func (sm *SM) executeIRQ(clearIRQ bool, waitIRQ bool, index uint) error {
+func (sm *SM) executeIRQ(clearIRQ bool, waitIRQ bool, index uint, currentlyStalled bool) (stalled bool, err error) {
 	relative := (index>>4)&0b1 == 1
 	irq := index & 0b111
 	if relative {
@@ -1258,15 +1261,14 @@ func (sm *SM) executeIRQ(clearIRQ bool, waitIRQ bool, index uint) error {
 		irq = upperBit | lowerBits
 	}
 
-	if sm.stalledIRQ {
-		sm.stalledIRQ = ((sm.irqInputs >> irq) & 0b1) == 1
-		return nil
+	if currentlyStalled {
+		return ((sm.irqInputs >> irq) & 0b1) == 1, nil
 	}
 
 	var irqMask uint8 = (0b1 << irq)
 	if clearIRQ {
 		if waitIRQ {
-			return ErrSMIRQClearWaitDisallowed
+			return false, ErrSMIRQClearWaitDisallowed
 		}
 		sm.irqWrites &= ^irqMask
 		sm.irqWritesMask |= irqMask
@@ -1274,11 +1276,11 @@ func (sm *SM) executeIRQ(clearIRQ bool, waitIRQ bool, index uint) error {
 		sm.irqWrites |= irqMask
 		sm.irqWritesMask |= irqMask
 		if waitIRQ {
-			sm.stalledIRQ = true
+			return true, nil
 		}
 	}
 
-	return nil
+	return false, nil
 }
 
 type setDestination uint
