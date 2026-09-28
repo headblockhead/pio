@@ -127,22 +127,24 @@ type Configurator interface {
 type Controller interface {
 	SetPinInputs(uint32)
 	SetIRQInputs(uint8)
+
+	Tick() error
+
 	PinOutputEnables() uint32
 	PinOutputEnablesMask() uint32
 	PinOutputs() uint32
 	PinOutputsMask() uint32
+	SidesetControlsPinDirection() bool
 	PinSidesets() uint32
 	PinSidesetsMask() uint32
 	IRQWrites() uint8
 	IRQWritesMask() uint8
-
-	Tick() error
 }
 
 type SM struct {
 	index uint
 
-	memoryReader memory.MemoryReader
+	memoryReader memory.Reader
 	fifoRX       fifo.Writer
 	fifoTX       fifo.Reader
 
@@ -215,7 +217,7 @@ type SM struct {
 	clockDividerFractionAccumulator uint8
 }
 
-func NewSM(index uint, memoryReader memory.MemoryReader) *SM {
+func NewSM(index uint, memoryReader memory.Reader) *SM {
 	return &SM{
 		index: index,
 

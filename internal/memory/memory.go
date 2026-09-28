@@ -2,6 +2,20 @@ package memory
 
 import "errors"
 
+type Observer interface {
+	Size() uint
+	Data() []uint16
+	Initialized() []bool
+}
+
+type Reader interface {
+	Read(address uint) (uint16, error)
+}
+
+type Writer interface {
+	Write(address uint, value uint16) error
+}
+
 type Memory struct {
 	data        []uint16
 	initialized []bool
@@ -14,15 +28,18 @@ func NewMemory(size uint) *Memory {
 	}
 }
 
+func (m *Memory) Observer() Observer {
+	return m
+}
+
 func (m *Memory) Size() uint {
 	return (uint)(len(m.data))
 }
 
-type MemoryReader interface {
-	Read(address uint) (uint16, error)
-}
+func (m *Memory) Data() []uint16      { return m.data }
+func (m *Memory) Initialized() []bool { return m.initialized }
 
-func (m *Memory) Reader() MemoryReader {
+func (m *Memory) Reader() Reader {
 	return m
 }
 
@@ -39,11 +56,7 @@ func (m *Memory) Read(address uint) (uint16, error) {
 	return m.data[address], nil
 }
 
-type MemoryWriter interface {
-	Write(address uint, value uint16) error
-}
-
-func (m *Memory) Writer() MemoryWriter {
+func (m *Memory) Writer() Writer {
 	return m
 }
 
