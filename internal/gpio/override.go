@@ -1,6 +1,9 @@
 package gpio
 
-import "errors"
+import (
+	"errors"
+	"fmt"
+)
 
 type Override uint
 
@@ -11,7 +14,7 @@ const (
 	OverrideAlways1
 )
 
-var ErrOverrideInvalid = errors.New("invalid override")
+var ErrOverrideInvalid = errors.New("override invalid")
 
 func (o Override) ApplyTo(v bool) (bool, error) {
 	switch o {
@@ -24,5 +27,5 @@ func (o Override) ApplyTo(v bool) (bool, error) {
 	case OverrideAlways1:
 		return true, nil
 	}
-	return v, ErrOverrideInvalid
+	return v, fmt.Errorf("%w: %d", ErrOverrideInvalid, o)
 }

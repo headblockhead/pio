@@ -59,11 +59,11 @@ func (f *FIFO) Level() uint        { return f.level }
 func (f *FIFO) Buffer() []uint32   { return f.buf }
 func (f *FIFO) IsEmpty() bool      { return f.Level() == 0 }
 
-var ErrFIFOEmpty = errors.New("FIFO is empty")
+var ErrEmpty = errors.New("empty")
 
 func (f *FIFO) Read() (uint32, error) {
 	if f.IsEmpty() {
-		return 0, ErrFIFOEmpty
+		return 0, ErrEmpty
 	}
 	f.level--
 	value := f.buf[f.tail]
@@ -73,11 +73,11 @@ func (f *FIFO) Read() (uint32, error) {
 
 func (f *FIFO) IsFull() bool { return f.Level() >= f.Size() }
 
-var ErrFIFOFull = errors.New("FIFO is full")
+var ErrFull = errors.New("full")
 
 func (f *FIFO) Write(value uint32) error {
 	if f.IsFull() {
-		return ErrFIFOFull
+		return ErrFull
 	}
 	f.level++
 	f.buf[f.head] = value

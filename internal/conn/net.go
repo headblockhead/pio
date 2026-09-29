@@ -14,32 +14,32 @@ func newNet() *net {
 	return &net{}
 }
 
-var ErrNetConnectionAlreadyConnected = errors.New("connection is already connected to this net")
+var ErrAlreadyConnected = errors.New("already connected")
 
 func (n *net) connect(c Connection) error {
 	_, exists := n.connections[c.ID()]
 	if exists {
-		return ErrNetConnectionAlreadyConnected
+		return ErrAlreadyConnected
 	}
 	n.connections[c.ID()] = c
 	return nil
 }
 
-var ErrNetConnectionNotCurrentlyConnected = errors.New("connection is not currently connected to this net")
+var ErrNotCurrentlyConnected = errors.New("not currently connected")
 
 func (n *net) disconnect(c Connection) error {
 	_, exists := n.connections[c.ID()]
 	if !exists {
-		return ErrNetConnectionNotCurrentlyConnected
+		return ErrNotCurrentlyConnected
 	}
 	delete(n.connections, c.ID())
 	return nil
 }
 
-var ErrSolveInvalidConnectionState = errors.New("invalid connection state")
-var ErrSolveConflictingDrive = errors.New("net is driven with conflicting values by at least two connections")
-var ErrSolveConflictingPullups = errors.New("net is pulled with conflicting pulls by at least two connections")
-var ErrSolveFloating = errors.New("net is floating, which is likely unintentional")
+var ErrSolveConnectionStateInvalid = errors.New("connection state invalid")
+var ErrSolveConflictingDrive = errors.New("conflicting drive")
+var ErrSolveConflictingPulls = errors.New("conflicting pulls")
+var ErrSolveFloating = errors.New("floating")
 
 func (n *net) solve() error {
 	previousState := n.isHigh
@@ -66,7 +66,7 @@ func (n *net) solve() error {
 		case StatePullDown:
 			pulledDown = true
 		default:
-			return fmt.Errorf("connection %s: %w", c.ID(), ErrSolveInvalidConnectionState)
+			return fmt.Errorf("connection %s: %w: %d", c.ID(), ErrSolveConnectionStateInvalid, state)
 		}
 	}
 
@@ -74,7 +74,7 @@ func (n *net) solve() error {
 		return ErrSolveConflictingDrive
 	}
 	if pulledUp && pulledDown {
-		return ErrSolveConflictingPullups
+		return ErrSolveConflictingPulls
 	}
 
 	if drivenHigh {
