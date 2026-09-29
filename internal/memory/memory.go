@@ -32,10 +32,7 @@ func (m *Memory) Observer() Observer {
 	return m
 }
 
-func (m *Memory) Size() uint {
-	return (uint)(len(m.data))
-}
-
+func (m *Memory) Size() uint          { return (uint)(len(m.data)) }
 func (m *Memory) Data() []uint16      { return m.data }
 func (m *Memory) Initialized() []bool { return m.initialized }
 
