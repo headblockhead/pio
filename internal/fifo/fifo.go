@@ -51,33 +51,13 @@ func (f *FIFO) Resize(size uint) {
 	f.level = 0
 }
 
-func (f *FIFO) Observer() Observer {
-	return f
-}
-
-func (f *FIFO) Reader() Reader {
-	return f
-}
-
-func (f *FIFO) Writer() Writer {
-	return f
-}
-
-func (f *FIFO) Size() uint {
-	return (uint)(len(f.buf))
-}
-
-func (f *FIFO) Level() uint {
-	return f.level
-}
-
-func (f *FIFO) Buffer() []uint32 {
-	return f.buf
-}
-
-func (f *FIFO) IsEmpty() bool {
-	return f.Level() == 0
-}
+func (f *FIFO) Observer() Observer { return f }
+func (f *FIFO) Reader() Reader     { return f }
+func (f *FIFO) Writer() Writer     { return f }
+func (f *FIFO) Size() uint         { return (uint)(len(f.buf)) }
+func (f *FIFO) Level() uint        { return f.level }
+func (f *FIFO) Buffer() []uint32   { return f.buf }
+func (f *FIFO) IsEmpty() bool      { return f.Level() == 0 }
 
 var ErrFIFOEmpty = errors.New("FIFO is empty")
 
@@ -91,9 +71,7 @@ func (f *FIFO) Read() (uint32, error) {
 	return value, nil
 }
 
-func (f *FIFO) IsFull() bool {
-	return f.Level() >= f.Size()
-}
+func (f *FIFO) IsFull() bool { return f.Level() >= f.Size() }
 
 var ErrFIFOFull = errors.New("FIFO is full")
 
