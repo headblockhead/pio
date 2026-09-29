@@ -67,11 +67,11 @@ func (p *PIO) Observer() Observer {
 
 func (p *PIO) MemoryObserver() memory.Observer { return p.memory.Observer() }
 
-var ErrPIOSMOutOfRange = errors.New("out of range")
+var ErrSMOutOfRange = errors.New("SM out of range")
 
 func (p *PIO) SMObserver(i uint) (sm.Observer, error) {
 	if i >= uint(len(p.stateMachines)) {
-		return nil, ErrPIOSMOutOfRange
+		return nil, ErrSMOutOfRange
 	}
 	return p.stateMachines[i].Observer(), nil
 }
@@ -89,7 +89,7 @@ func (p *PIO) Configurator() Configurator {
 
 func (p *PIO) SMConfigurator(i uint) (sm.Configurator, error) {
 	if i >= uint(len(p.stateMachines)) {
-		return nil, ErrPIOSMOutOfRange
+		return nil, ErrSMOutOfRange
 	}
 	return p.stateMachines[i].Configurator(), nil
 }
@@ -116,7 +116,7 @@ func (p *PIO) Tick() error {
 
 		err := c.Tick()
 		if err != nil {
-			return fmt.Errorf("error ticking state machine %d: %w", i, err)
+			return fmt.Errorf("SM %d: %w", i, err)
 		}
 
 		p.pinOutputEnables &= ^c.PinOutputEnablesMask()

@@ -1,6 +1,9 @@
 package gpio
 
-import "testing"
+import (
+	"errors"
+	"testing"
+)
 
 func TestOverride(t *testing.T) {
 	var nonExistantOverride Override = Override(0)
@@ -28,7 +31,7 @@ func TestOverride(t *testing.T) {
 	for _, testCase := range overrideTests {
 		t.Run(testCase.name, func(t *testing.T) {
 			actualOutput, actualError := testCase.override.ApplyTo(testCase.input)
-			if testCase.expectedError != actualError {
+			if !errors.Is(actualError, testCase.expectedError) {
 				t.Fatalf("expected error to be %v, got %v", testCase.expectedError, actualError)
 			}
 			if testCase.expectedOutput != actualOutput {

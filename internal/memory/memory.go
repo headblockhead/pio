@@ -40,15 +40,15 @@ func (m *Memory) Reader() Reader {
 	return m
 }
 
-var ErrMemoryOutOfBounds = errors.New("out of bounds")
-var ErrMemoryUninitialized = errors.New("uninitialized memory")
+var ErrOutOfBounds = errors.New("out of bounds")
+var ErrValueUninitialized = errors.New("value uninitialized")
 
 func (m *Memory) Read(address uint) (uint16, error) {
 	if address >= m.Size() {
-		return 0, ErrMemoryOutOfBounds
+		return 0, ErrOutOfBounds
 	}
 	if !m.initialized[address] {
-		return 0, ErrMemoryUninitialized
+		return 0, ErrValueUninitialized
 	}
 	return m.data[address], nil
 }
@@ -59,7 +59,7 @@ func (m *Memory) Writer() Writer {
 
 func (m *Memory) Write(address uint, value uint16) error {
 	if address >= m.Size() {
-		return ErrMemoryOutOfBounds
+		return ErrOutOfBounds
 	}
 	m.data[address] = value
 	m.initialized[address] = true
