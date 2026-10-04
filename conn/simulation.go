@@ -51,3 +51,19 @@ func (s *Simulation) Solve() error {
 	}
 	return nil
 }
+
+func (s *Simulation) ListNets() []string {
+	ids := make([]string, 0, len(s.nets))
+	for id := range s.nets {
+		ids = append(ids, id)
+	}
+	return ids
+}
+
+func (s *Simulation) GetNetIsHigh(id string) (bool, error) {
+	net, ok := s.nets[id]
+	if !ok {
+		return false, ErrNetNotFound
+	}
+	return net.isHigh, nil
+}

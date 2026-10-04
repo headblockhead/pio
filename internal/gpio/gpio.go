@@ -8,18 +8,18 @@ const (
 	FunctionPIO1
 )
 
-type Setter interface {
-	SetOutputEnableOverride(Override)
-	SetOutputOverride(Override)
-	SetInputOverride(Override)
-	SetFunction(Function)
-}
-
-type Getter interface {
+type Observer interface {
 	GetOutputEnableOverride() Override
 	GetOutputOverride() Override
 	GetInputOverride() Override
 	GetFunction() Function
+}
+
+type Configurator interface {
+	SetOutputEnableOverride(Override)
+	SetOutputOverride(Override)
+	SetInputOverride(Override)
+	SetFunction(Function)
 }
 
 type GPIO struct {
@@ -33,7 +33,7 @@ func NewGPIO() *GPIO {
 	return &GPIO{}
 }
 
-func (g *GPIO) Setter() Setter {
+func (g *GPIO) Configurator() Configurator {
 	return g
 }
 
@@ -42,7 +42,7 @@ func (g *GPIO) SetOutputOverride(o Override)       { g.outputOverride = o }
 func (g *GPIO) SetInputOverride(o Override)        { g.inputOverride = o }
 func (g *GPIO) SetFunction(f Function)             { g.function = f }
 
-func (g *GPIO) Getter() Getter {
+func (g *GPIO) Observer() Observer {
 	return g
 }
 
