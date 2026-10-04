@@ -1,6 +1,23 @@
 package pad
 
-import "github.com/headblockhead/pio/internal/conn"
+import "github.com/headblockhead/pio/conn"
+
+type Configurator interface {
+	SetPullUp(bool)
+	SetPullDown(bool)
+	SetOutputDisabled(bool)
+	SetInputEnabled(bool)
+	SetOutputDelayCycles(uint)
+	SetInputDelayCycles(uint)
+}
+
+type Controller interface {
+	SetOutputEnabled(bool)
+	SetOutput(bool)
+	GetInput() bool
+
+	Tick() error
+}
 
 func padState(shouldOutput bool, outputValue bool, pullUp bool, pullDown bool) conn.State {
 	if shouldOutput {
@@ -50,31 +67,14 @@ func NewPad(id string) *Pad {
 	}
 }
 
-type Configurator interface {
-	SetPullUp(bool)
-	SetPullDown(bool)
-	SetOutputDisabled(bool)
-	SetInputEnabled(bool)
-	SetOutputDelayCycles(uint)
-	SetInputDelayCycles(uint)
-}
-
 func (p *Pad) Configurator() Configurator {
 	return p
 }
 
-func (p *Pad) SetPullUp(pu bool) {
-	p.pullUp = pu
-}
-func (p *Pad) SetPullDown(pd bool) {
-	p.pullDown = pd
-}
-func (p *Pad) SetOutputDisabled(d bool) {
-	p.outputDisabled = d
-}
-func (p *Pad) SetInputEnabled(e bool) {
-	p.inputEnabled = e
-}
+func (p *Pad) SetPullUp(pu bool)        { p.pullUp = pu }
+func (p *Pad) SetPullDown(pd bool)      { p.pullDown = pd }
+func (p *Pad) SetOutputDisabled(d bool) { p.outputDisabled = d }
+func (p *Pad) SetInputEnabled(e bool)   { p.inputEnabled = e }
 func (p *Pad) SetOutputDelayCycles(c uint) {
 	prev := len(p.stateHistory)
 	p.stateHistory = p.stateHistory[:c+1]
@@ -92,27 +92,13 @@ func (p *Pad) SetInputDelayCycles(c uint) {
 	}
 }
 
-type Controller interface {
-	SetOutputEnabled(bool)
-	SetOutput(bool)
-	GetInput() bool
-
-	Tick() error
-}
-
 func (p *Pad) Controller() Controller {
 	return p
 }
 
-func (p *Pad) SetOutputEnabled(e bool) {
-	p.outputEnabled = e
-}
-func (p *Pad) SetOutput(o bool) {
-	p.output = o
-}
-func (p *Pad) GetInput() bool {
-	return p.inputHistory[len(p.inputHistory)-1]
-}
+func (p *Pad) SetOutputEnabled(e bool) { p.outputEnabled = e }
+func (p *Pad) SetOutput(o bool)        { p.output = o }
+func (p *Pad) GetInput() bool          { return p.inputHistory[len(p.inputHistory)-1] }
 
 func (p *Pad) Tick() error {
 	for i := 1; i < len(p.stateHistory); i++ {
@@ -132,12 +118,6 @@ func (p *Pad) Connection() conn.Connection {
 	return p
 }
 
-func (p *Pad) ID() string {
-	return p.id
-}
-func (p *Pad) GetState() conn.State {
-	return p.stateHistory[len(p.stateHistory)-1]
-}
-func (p *Pad) SetInput(input bool) {
-	p.inputHistory[0] = input
-}
+func (p *Pad) ID() string           { return p.id }
+func (p *Pad) GetState() conn.State { return p.stateHistory[len(p.stateHistory)-1] }
+func (p *Pad) SetInput(input bool)  { p.inputHistory[0] = input }
