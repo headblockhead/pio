@@ -37,6 +37,52 @@ func (r *RP2040) Connection(i uint) (c conn.Connection, ok bool) {
 	return r.pads[i].Connection(), true
 }
 
+func (r *RP2040) ConnectionBlock() conn.ConnectionBlock {
+	return r
+}
+
+func (r *RP2040) PIOObserver(i uint) (o pio.Observer, ok bool) {
+	if i >= 2 {
+		return nil, false
+	}
+	return r.pios[i].Observer(), true
+}
+
+func (r *RP2040) PIOConfigurator(i uint) (c pio.Configurator, ok bool) {
+	if i >= 2 {
+		return nil, false
+	}
+	return r.pios[i].Configurator(), true
+}
+
+func (r *RP2040) GPIOObserver(i uint) (o gpio.Observer, ok bool) {
+	if i >= rp2040PadCount {
+		return nil, false
+	}
+	return r.gpios[i].Observer(), true
+}
+
+func (r *RP2040) GPIOConfigurator(i uint) (c gpio.Configurator, ok bool) {
+	if i >= rp2040PadCount {
+		return nil, false
+	}
+	return r.gpios[i].Configurator(), true
+}
+
+func (r *RP2040) PadObserver(i uint) (o pad.Observer, ok bool) {
+	if i >= rp2040PadCount {
+		return nil, false
+	}
+	return r.pads[i].Observer(), true
+}
+
+func (r *RP2040) PadConfigurator(i uint) (c pad.Configurator, ok bool) {
+	if i >= rp2040PadCount {
+		return nil, false
+	}
+	return r.pads[i].Configurator(), true
+}
+
 var ErrGPIOFunctionInvalid = errors.New("gpio function invalid")
 
 func (r *RP2040) Tick() error {
