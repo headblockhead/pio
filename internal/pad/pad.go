@@ -12,6 +12,8 @@ type Configurator interface {
 }
 
 type Controller interface {
+	ID() string
+
 	SetOutputEnabled(bool)
 	SetOutput(bool)
 	GetInput() bool
@@ -71,10 +73,10 @@ func (p *Pad) Configurator() Configurator {
 	return p
 }
 
-func (p *Pad) SetPullUp(pu bool)        { p.pullUp = pu }
-func (p *Pad) SetPullDown(pd bool)      { p.pullDown = pd }
-func (p *Pad) SetOutputDisabled(d bool) { p.outputDisabled = d }
-func (p *Pad) SetInputEnabled(e bool)   { p.inputEnabled = e }
+func (p *Pad) SetPullUp(pullUp bool)                 { p.pullUp = pullUp }
+func (p *Pad) SetPullDown(pullDown bool)             { p.pullDown = pullDown }
+func (p *Pad) SetOutputDisabled(outputDisabled bool) { p.outputDisabled = outputDisabled }
+func (p *Pad) SetInputEnabled(inputEnabled bool)     { p.inputEnabled = inputEnabled }
 func (p *Pad) SetOutputDelayCycles(c uint) {
 	prev := len(p.stateHistory)
 	p.stateHistory = p.stateHistory[:c+1]
@@ -96,9 +98,9 @@ func (p *Pad) Controller() Controller {
 	return p
 }
 
-func (p *Pad) SetOutputEnabled(e bool) { p.outputEnabled = e }
-func (p *Pad) SetOutput(o bool)        { p.output = o }
-func (p *Pad) GetInput() bool          { return p.inputHistory[len(p.inputHistory)-1] }
+func (p *Pad) SetOutputEnabled(outputEnabled bool) { p.outputEnabled = outputEnabled }
+func (p *Pad) SetOutput(output bool)               { p.output = output }
+func (p *Pad) GetInput() bool                      { return p.inputHistory[len(p.inputHistory)-1] }
 
 func (p *Pad) Tick() error {
 	for i := 1; i < len(p.stateHistory); i++ {

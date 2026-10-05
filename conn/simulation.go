@@ -5,12 +5,35 @@ import (
 	"fmt"
 )
 
+type Ticker interface {
+	Tick() error
+}
+
+type ConnectionBlock interface {
+	Connection(uint) (c Connection, ok bool)
+}
+
 type Simulation struct {
-	nets map[string]*net
+	nets    map[string]*net
+	tickers []Ticker
 }
 
 func NewSimulation() *Simulation {
 	return &Simulation{}
+}
+
+func (s *Simulation) Tick() error {
+	err := s.Solve()
+	if err != nil {
+		return fmt.Errorf("solve: %w", err)
+	}
+	for i, t := range s.tickers {
+		err := t.Tick()
+		if err != nil {
+			return fmt.Errorf("ticker %d: %w", i, err)
+		}
+	}
+	return nil
 }
 
 var ErrNetAlreadyExists = errors.New("already exists")
@@ -34,12 +57,30 @@ func (s *Simulation) Connect(c Connection, netID string) error {
 	return net.connect(c)
 }
 
+var ErrConnectionNotFoundInBlock = errors.New("connection not found in block")
+
+func (s *Simulation) ConnectFromBlock(b ConnectionBlock, i uint, netID string) error {
+	c, ok := b.Connection(i)
+	if !ok {
+		return ErrConnectionNotFoundInBlock
+	}
+	return s.Connect(c, netID)
+}
+
 func (s *Simulation) Disconnect(c Connection, netID string) error {
 	net, ok := s.nets[netID]
 	if !ok {
 		return ErrNetNotFound
 	}
 	return net.disconnect(c)
+}
+
+func (s *Simulation) DisconnectFromBlock(b ConnectionBlock, i uint, netID string) error {
+	c, ok := b.Connection(i)
+	if !ok {
+		return ErrConnectionNotFoundInBlock
+	}
+	return s.Disconnect(c, netID)
 }
 
 func (s *Simulation) Solve() error {

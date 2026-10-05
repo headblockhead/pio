@@ -16,9 +16,7 @@ type Observer interface {
 	PinInputs() uint32
 
 	PinOutputEnables() uint32
-	PinOutputEnablesMask() uint32
 	PinOutputs() uint32
-	PinOutputsMask() uint32
 }
 
 type Configurator interface {
@@ -31,9 +29,7 @@ type Controller interface {
 	Tick() error
 
 	PinOutputEnables() uint32
-	PinOutputEnablesMask() uint32
 	PinOutputs() uint32
-	PinOutputsMask() uint32
 	IRQs() uint8
 }
 
@@ -45,10 +41,8 @@ type PIO struct {
 
 	pinInputs uint32
 
-	pinOutputEnables     uint32
-	pinOutputEnablesMask uint32
-	pinOutputs           uint32
-	pinOutputsMask       uint32
+	pinOutputEnables uint32
+	pinOutputs       uint32
 }
 
 func NewPIO(memorySize uint, numberOfSMs uint) *PIO {
@@ -76,12 +70,10 @@ func (p *PIO) SMObserver(i uint) (sm.Observer, error) {
 	return p.stateMachines[i].Observer(), nil
 }
 
-func (p *PIO) IRQs() uint8                  { return p.irqs }
-func (p *PIO) PinInputs() uint32            { return p.pinInputs }
-func (p *PIO) PinOutputEnables() uint32     { return p.pinOutputEnables }
-func (p *PIO) PinOutputEnablesMask() uint32 { return p.pinOutputEnablesMask }
-func (p *PIO) PinOutputs() uint32           { return p.pinOutputs }
-func (p *PIO) PinOutputsMask() uint32       { return p.pinOutputsMask }
+func (p *PIO) IRQs() uint8              { return p.irqs }
+func (p *PIO) PinInputs() uint32        { return p.pinInputs }
+func (p *PIO) PinOutputEnables() uint32 { return p.pinOutputEnables }
+func (p *PIO) PinOutputs() uint32       { return p.pinOutputs }
 
 func (p *PIO) Configurator() Configurator {
 	return p
@@ -101,11 +93,6 @@ func (p *PIO) Controller() Controller {
 func (p *PIO) SetPinInputs(pinInputs uint32) { p.pinInputs = pinInputs }
 
 func (p *PIO) Tick() error {
-	p.pinOutputEnables = 0
-	p.pinOutputEnablesMask = 0
-	p.pinOutputs = 0
-	p.pinOutputsMask = 0
-
 	inputIRQs := p.irqs
 	inputsPins := p.pinInputs
 
@@ -121,18 +108,14 @@ func (p *PIO) Tick() error {
 
 		p.pinOutputEnables &= ^c.PinOutputEnablesMask()
 		p.pinOutputEnables |= (c.PinOutputEnables() & c.PinOutputEnablesMask())
-		p.pinOutputEnablesMask |= c.PinOutputEnablesMask()
 		p.pinOutputs &= ^c.PinOutputsMask()
 		p.pinOutputs |= (c.PinOutputs() & c.PinOutputsMask())
-		p.pinOutputsMask |= c.PinOutputsMask()
 		if c.SidesetControlsPinDirection() {
 			p.pinOutputEnables &= ^c.PinSidesetsMask()
 			p.pinOutputEnables |= (c.PinSidesets() & c.PinSidesetsMask())
-			p.pinOutputEnablesMask |= c.PinSidesetsMask()
 		} else {
 			p.pinOutputs &= ^c.PinSidesetsMask()
 			p.pinOutputs |= (c.PinSidesets() & c.PinSidesetsMask())
-			p.pinOutputsMask |= c.PinSidesetsMask()
 		}
 		p.irqs &= ^c.IRQWritesMask()
 		p.irqs |= (c.IRQWrites() & c.IRQWritesMask())
