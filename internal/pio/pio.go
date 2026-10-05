@@ -20,6 +20,7 @@ type Observer interface {
 }
 
 type Configurator interface {
+	MemoryWriter() memory.Writer
 	SMConfigurator(uint) (sm.Configurator, error)
 }
 
