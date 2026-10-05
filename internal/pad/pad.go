@@ -2,6 +2,20 @@ package pad
 
 import "github.com/headblockhead/pio/conn"
 
+type Observer interface {
+	ID() string
+	PulledUp() bool
+	PulledDown() bool
+	OutputDisabled() bool
+	InputEnabled() bool
+
+	OutputEnabled() bool
+	Output() bool
+
+	StateHistory() []conn.State
+	InputHistory() []bool
+}
+
 type Configurator interface {
 	SetPullUp(bool)
 	SetPullDown(bool)
@@ -69,6 +83,20 @@ func NewPad(id string) *Pad {
 	}
 }
 
+func (p *Pad) Observer() Observer {
+	return p
+}
+
+func (p *Pad) ID() string                 { return p.id }
+func (p *Pad) PulledUp() bool             { return p.pullUp }
+func (p *Pad) PulledDown() bool           { return p.pullDown }
+func (p *Pad) OutputDisabled() bool       { return p.outputDisabled }
+func (p *Pad) InputEnabled() bool         { return p.inputEnabled }
+func (p *Pad) OutputEnabled() bool        { return p.outputEnabled }
+func (p *Pad) Output() bool               { return p.output }
+func (p *Pad) StateHistory() []conn.State { return p.stateHistory }
+func (p *Pad) InputHistory() []bool       { return p.inputHistory }
+
 func (p *Pad) Configurator() Configurator {
 	return p
 }
@@ -120,6 +148,5 @@ func (p *Pad) Connection() conn.Connection {
 	return p
 }
 
-func (p *Pad) ID() string           { return p.id }
 func (p *Pad) GetState() conn.State { return p.stateHistory[len(p.stateHistory)-1] }
 func (p *Pad) SetInput(input bool)  { p.inputHistory[0] = input }
