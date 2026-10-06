@@ -80,6 +80,8 @@ func (p *PIO) Configurator() Configurator {
 	return p
 }
 
+func (p *PIO) MemoryWriter() memory.Writer { return p.memory.Writer() }
+
 func (p *PIO) SMConfigurator(i uint) (sm.Configurator, error) {
 	if i >= uint(len(p.stateMachines)) {
 		return nil, ErrSMOutOfRange
