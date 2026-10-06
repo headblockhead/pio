@@ -6,6 +6,7 @@ import (
 )
 
 type Ticker interface {
+	ID() string
 	Tick() error
 }
 
@@ -15,11 +16,14 @@ type ConnectionBlock interface {
 
 type Simulation struct {
 	nets    map[string]*net
-	tickers []Ticker
+	tickers map[string]Ticker
 }
 
 func NewSimulation() *Simulation {
-	return &Simulation{}
+	return &Simulation{
+		nets:    make(map[string]*net),
+		tickers: make(map[string]Ticker),
+	}
 }
 
 func (s *Simulation) Tick() error {
@@ -27,18 +31,18 @@ func (s *Simulation) Tick() error {
 	if err != nil {
 		return fmt.Errorf("solve: %w", err)
 	}
-	for i, t := range s.tickers {
+	for id, t := range s.tickers {
 		err := t.Tick()
 		if err != nil {
-			return fmt.Errorf("ticker %d: %w", i, err)
+			return fmt.Errorf("ticker %s: %w", id, err)
 		}
 	}
 	return nil
 }
 
-var ErrNetAlreadyExists = errors.New("already exists")
+var ErrNetAlreadyExists = errors.New("net already exists")
 
-func (s *Simulation) CreateNet(id string) error {
+func (s *Simulation) AddNet(id string) error {
 	_, exists := s.nets[id]
 	if exists {
 		return ErrNetAlreadyExists
@@ -47,7 +51,16 @@ func (s *Simulation) CreateNet(id string) error {
 	return nil
 }
 
-var ErrNetNotFound = errors.New("not found")
+func (s *Simulation) RemoveNet(id string) error {
+	_, exists := s.nets[id]
+	if !exists {
+		return ErrNetNotFound
+	}
+	delete(s.nets, id)
+	return nil
+}
+
+var ErrNetNotFound = errors.New("net not found")
 
 func (s *Simulation) Connect(c Connection, netID string) error {
 	net, ok := s.nets[netID]
@@ -81,6 +94,28 @@ func (s *Simulation) DisconnectFromBlock(b ConnectionBlock, i uint, netID string
 		return ErrConnectionNotFoundInBlock
 	}
 	return s.Disconnect(c, netID)
+}
+
+var ErrTickerAlreadyExists = errors.New("ticker already exists")
+
+func (s *Simulation) AddTicker(t Ticker) error {
+	_, exists := s.tickers[t.ID()]
+	if exists {
+		return ErrTickerAlreadyExists
+	}
+	s.tickers[t.ID()] = t
+	return nil
+}
+
+var ErrTickerNotFound = errors.New("ticker not found")
+
+func (s *Simulation) RemoveTicker(id string) error {
+	_, exists := s.tickers[id]
+	if !exists {
+		return ErrTickerNotFound
+	}
+	delete(s.tickers, id)
+	return nil
 }
 
 func (s *Simulation) Solve() error {

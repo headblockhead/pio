@@ -13,13 +13,16 @@ import (
 const rp2040PadCount = 30
 
 type RP2040 struct {
+	id    string
 	pios  [2]*pio.PIO
 	gpios [rp2040PadCount]*gpio.GPIO
 	pads  [rp2040PadCount]*pad.Pad
 }
 
 func NewRP2040(id string) *RP2040 {
-	r := &RP2040{}
+	r := &RP2040{
+		id: id,
+	}
 	for i := range 2 {
 		r.pios[i] = pio.NewPIO(32, 4)
 	}
@@ -29,6 +32,8 @@ func NewRP2040(id string) *RP2040 {
 	}
 	return r
 }
+
+func (r *RP2040) ID() string { return r.id }
 
 func (r *RP2040) Connection(i uint) (c conn.Connection, ok bool) {
 	if i >= rp2040PadCount {
