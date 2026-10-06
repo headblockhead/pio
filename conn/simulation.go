@@ -10,10 +10,6 @@ type Ticker interface {
 	Tick() error
 }
 
-type ConnectionBlock interface {
-	Connection(uint) (c Connection, ok bool)
-}
-
 type Simulation struct {
 	nets    map[string]*net
 	tickers map[string]Ticker
@@ -70,30 +66,12 @@ func (s *Simulation) Connect(c Connection, netID string) error {
 	return net.connect(c)
 }
 
-var ErrConnectionNotFoundInBlock = errors.New("connection not found in block")
-
-func (s *Simulation) ConnectFromBlock(b ConnectionBlock, i uint, netID string) error {
-	c, ok := b.Connection(i)
-	if !ok {
-		return ErrConnectionNotFoundInBlock
-	}
-	return s.Connect(c, netID)
-}
-
 func (s *Simulation) Disconnect(c Connection, netID string) error {
 	net, ok := s.nets[netID]
 	if !ok {
 		return ErrNetNotFound
 	}
 	return net.disconnect(c)
-}
-
-func (s *Simulation) DisconnectFromBlock(b ConnectionBlock, i uint, netID string) error {
-	c, ok := b.Connection(i)
-	if !ok {
-		return ErrConnectionNotFoundInBlock
-	}
-	return s.Disconnect(c, netID)
 }
 
 var ErrTickerAlreadyExists = errors.New("ticker already exists")
