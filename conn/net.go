@@ -11,7 +11,9 @@ type net struct {
 }
 
 func newNet() *net {
-	return &net{}
+	return &net{
+		connections: make(map[string]Connection),
+	}
 }
 
 var ErrAlreadyConnected = errors.New("already connected")

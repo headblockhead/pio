@@ -10,11 +10,12 @@ import (
 	"github.com/headblockhead/pio/internal/pio"
 )
 
+const rp2040PIOCount = 2
 const rp2040PadCount = 30
 
 type RP2040 struct {
 	id    string
-	pios  [2]*pio.PIO
+	pios  [rp2040PIOCount]*pio.PIO
 	gpios [rp2040PadCount]*gpio.GPIO
 	pads  [rp2040PadCount]*pad.Pad
 }
@@ -42,19 +43,15 @@ func (r *RP2040) Connection(i uint) (c conn.Connection, ok bool) {
 	return r.pads[i].Connection(), true
 }
 
-func (r *RP2040) ConnectionBlock() conn.ConnectionBlock {
-	return r
-}
-
 func (r *RP2040) PIOObserver(i uint) (o pio.Observer, ok bool) {
-	if i >= 2 {
+	if i >= rp2040PIOCount {
 		return nil, false
 	}
 	return r.pios[i].Observer(), true
 }
 
 func (r *RP2040) PIOConfigurator(i uint) (c pio.Configurator, ok bool) {
-	if i >= 2 {
+	if i >= rp2040PIOCount {
 		return nil, false
 	}
 	return r.pios[i].Configurator(), true
@@ -114,6 +111,7 @@ func (r *RP2040) Tick() error {
 			return fmt.Errorf("pio %d: %w", i, err)
 		}
 	}
+
 	pio0C := r.pios[0].Controller()
 	pio0PinOutputs := pio0C.PinOutputs()
 	pio0PinOutputEnables := pio0C.PinOutputEnables()
