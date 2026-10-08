@@ -2,6 +2,7 @@ package fifo
 
 import (
 	"errors"
+	"fmt"
 )
 
 type Observer interface {
@@ -36,9 +37,14 @@ type FIFO struct {
 	level uint
 }
 
-func NewFIFO(size uint) *FIFO {
-	buf := make([]uint32, size)
-	return &FIFO{buf: buf}
+func New(size uint) *FIFO {
+	return &FIFO{
+		buf: make([]uint32, size),
+
+		head:  0,
+		tail:  0,
+		level: 0,
+	}
 }
 
 func (f *FIFO) Resize(size uint) {
@@ -63,7 +69,7 @@ var ErrEmpty = errors.New("empty")
 
 func (f *FIFO) Read() (uint32, error) {
 	if f.IsEmpty() {
-		return 0, ErrEmpty
+		return 0, fmt.Errorf("reading: %w", ErrEmpty)
 	}
 	f.level--
 	value := f.buf[f.tail]
@@ -77,7 +83,7 @@ var ErrFull = errors.New("full")
 
 func (f *FIFO) Write(value uint32) error {
 	if f.IsFull() {
-		return ErrFull
+		return fmt.Errorf("writing 0x%08X: %w", value, ErrFull)
 	}
 	f.level++
 	f.buf[f.head] = value

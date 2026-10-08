@@ -22,11 +22,8 @@ type Configurator interface {
 	SetFunction(Function)
 }
 
-type Controller interface {
-	GetOutputEnableOverride() Override
-	GetOutputOverride() Override
-	GetInputOverride() Override
-	GetFunction() Function
+type Operator interface {
+	Observer
 }
 
 type GPIO struct {
@@ -36,14 +33,16 @@ type GPIO struct {
 	function             Function
 }
 
-func NewGPIO() *GPIO {
-	return &GPIO{}
+func New() *GPIO {
+	return &GPIO{
+		outputEnableOverride: OverrideNone,
+		outputOverride:       OverrideNone,
+		inputOverride:        OverrideNone,
+		function:             FunctionNone,
+	}
 }
 
 func (g *GPIO) Observer() Observer {
-	return g
-}
-func (g *GPIO) Controller() Controller {
 	return g
 }
 
@@ -53,6 +52,10 @@ func (g *GPIO) GetInputOverride() Override        { return g.inputOverride }
 func (g *GPIO) GetFunction() Function             { return g.function }
 
 func (g *GPIO) Configurator() Configurator {
+	return g
+}
+
+func (g *GPIO) Operator() Operator {
 	return g
 }
 
