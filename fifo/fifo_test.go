@@ -1,6 +1,7 @@
 package fifo
 
 import (
+	"errors"
 	"fmt"
 	"testing"
 )
@@ -10,7 +11,7 @@ const fifoMaxTestingSize = 8
 func TestNewFIFO(t *testing.T) {
 	for i := range fifoMaxTestingSize + 1 {
 		t.Run(fmt.Sprintf("size=%d", i), func(t *testing.T) {
-			fifo := NewFIFO(uint(i))
+			fifo := New(uint(i))
 			expectedBufferLength := i
 			actualBufferLength := len(fifo.buf)
 			if expectedBufferLength != actualBufferLength {
@@ -23,7 +24,7 @@ func TestNewFIFO(t *testing.T) {
 func TestSize(t *testing.T) {
 	for i := range fifoMaxTestingSize + 1 {
 		t.Run(fmt.Sprintf("size=%d", i), func(t *testing.T) {
-			fifo := NewFIFO(uint(i))
+			fifo := New(uint(i))
 			expectedSize := i
 			actualSize := fifo.Size()
 			if expectedSize != int(actualSize) {
@@ -35,7 +36,7 @@ func TestSize(t *testing.T) {
 
 func TestFullEmpty(t *testing.T) {
 	t.Run("size=0", func(t *testing.T) {
-		fifo0 := NewFIFO(0)
+		fifo0 := New(0)
 		if !fifo0.IsEmpty() {
 			t.Errorf("expected fifo of size 0 to be empty")
 		}
@@ -45,7 +46,7 @@ func TestFullEmpty(t *testing.T) {
 	})
 	for size := 1; size <= fifoMaxTestingSize; size++ {
 		t.Run(fmt.Sprintf("size=%d", size), func(t *testing.T) {
-			fifo := NewFIFO(uint(size))
+			fifo := New(uint(size))
 			if !fifo.IsEmpty() {
 				t.Errorf("expected new fifo to be empty")
 			}
@@ -75,13 +76,13 @@ func TestFullEmpty(t *testing.T) {
 
 func TestReadWriteLevel(t *testing.T) {
 	t.Run("size=0", func(t *testing.T) {
-		fifo0 := NewFIFO(0)
+		fifo0 := New(0)
 		err := fifo0.Write(0)
-		if err != ErrFull {
+		if !errors.Is(err, ErrFull) {
 			t.Errorf("expected error ErrFIFOFull, got %v", err)
 		}
 		_, err = fifo0.Read()
-		if err != ErrEmpty {
+		if !errors.Is(err, ErrEmpty) {
 			t.Errorf("expected error ErrFIFOEmpty, got %v", err)
 		}
 		if fifo0.Level() != 0 {
@@ -95,7 +96,7 @@ func TestReadWriteLevel(t *testing.T) {
 	}
 
 	for size := 1; size <= fifoMaxTestingSize; size++ {
-		fifo := NewFIFO(uint(size))
+		fifo := New(uint(size))
 		if fifo.Level() != 0 {
 			t.Errorf("expected new fifo to have level 0")
 		}
@@ -112,7 +113,7 @@ func TestReadWriteLevel(t *testing.T) {
 				}
 				if fillAmount == size {
 					err := fifo.Write(0)
-					if err != ErrFull {
+					if !errors.Is(err, ErrFull) {
 						t.Errorf("expected error ErrFIFOFull, got %v", err)
 					}
 				}
@@ -127,7 +128,7 @@ func TestReadWriteLevel(t *testing.T) {
 					}
 				}
 				_, err := fifo.Read()
-				if err != ErrEmpty {
+				if !errors.Is(err, ErrEmpty) {
 					t.Errorf("expected error ErrFIFOEmpty, got %v", err)
 				}
 			})

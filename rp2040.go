@@ -3,141 +3,178 @@ package pio
 import (
 	"errors"
 	"fmt"
+	"strconv"
 
-	"github.com/headblockhead/pio/conn"
-	"github.com/headblockhead/pio/internal/gpio"
-	"github.com/headblockhead/pio/internal/pad"
-	"github.com/headblockhead/pio/internal/pio"
+	"github.com/headblockhead/pio/gpio"
+	"github.com/headblockhead/pio/pad"
+	"github.com/headblockhead/pio/pioblock"
+	"github.com/headblockhead/pio/simulation"
 )
 
+type RP2040Observer interface {
+	PIOObserver(uint) (pioblock.Observer, error)
+	GPIOObserver(uint) (gpio.Observer, error)
+	PadObserver(uint) (pad.Observer, error)
+}
+type RP2040Configurator interface {
+	SetLabel(string)
+	PIOConfigurator(uint) (pioblock.Configurator, error)
+	GPIOConfigurator(uint) (gpio.Configurator, error)
+	PadConfigurator(uint) (pad.Configurator, error)
+	Connection(uint) (simulation.Connection, error)
+}
+type RP2040Operator interface {
+	simulation.Ticker
+}
+
 const rp2040PIOCount = 2
+const rp2040MemorySize = 32
+const rp2040StateMachineCount = 4
 const rp2040PadCount = 30
 
 type RP2040 struct {
-	id    string
-	pios  [rp2040PIOCount]*pio.PIO
-	gpios [rp2040PadCount]*gpio.GPIO
-	pads  [rp2040PadCount]*pad.Pad
+	id    simulation.ComponentIdentifier
+	label string
+
+	pioBlocks [rp2040PIOCount]*pioblock.PIOBlock
+	gpios     [rp2040PadCount]*gpio.GPIO
+	pads      [rp2040PadCount]*pad.Pad
 }
 
-func NewRP2040(id string) *RP2040 {
+func NewRP2040(label string) *RP2040 {
 	r := &RP2040{
-		id: id,
+		id:        simulation.NewComponentIdentifier(),
+		label:     label,
+		pioBlocks: [rp2040PIOCount]*pioblock.PIOBlock{},
+		gpios:     [rp2040PadCount]*gpio.GPIO{},
+		pads:      [rp2040PadCount]*pad.Pad{},
 	}
 	for i := range 2 {
-		r.pios[i] = pio.NewPIO(32, 4)
+		r.pioBlocks[i] = pioblock.New(strconv.Itoa(int(i)), rp2040MemorySize, rp2040StateMachineCount)
 	}
 	for i := range 30 {
-		r.gpios[i] = gpio.NewGPIO()
-		r.pads[i] = pad.NewPad(fmt.Sprintf("%s_pad%d", id, i))
+		r.gpios[i] = gpio.New()
+		r.pads[i] = pad.New(strconv.Itoa(int(i)))
 	}
 	return r
 }
 
-func (r *RP2040) ID() string { return r.id }
+var ErrOutOfRange = errors.New("out of range")
 
-func (r *RP2040) Connection(i uint) (c conn.Connection, ok bool) {
-	if i >= rp2040PadCount {
-		return nil, false
-	}
-	return r.pads[i].Connection(), true
-}
-
-func (r *RP2040) PIOObserver(i uint) (o pio.Observer, ok bool) {
+func (r *RP2040) PIO(i uint) (*pioblock.PIOBlock, error) {
 	if i >= rp2040PIOCount {
-		return nil, false
+		return nil, fmt.Errorf("%w: %d, should be < %d", ErrOutOfRange, i, rp2040PIOCount)
 	}
-	return r.pios[i].Observer(), true
+	return r.pioBlocks[i], nil
 }
 
-func (r *RP2040) PIOConfigurator(i uint) (c pio.Configurator, ok bool) {
-	if i >= rp2040PIOCount {
-		return nil, false
-	}
-	return r.pios[i].Configurator(), true
-}
-
-func (r *RP2040) GPIOObserver(i uint) (o gpio.Observer, ok bool) {
+func (r *RP2040) GPIO(i uint) (*gpio.GPIO, error) {
 	if i >= rp2040PadCount {
-		return nil, false
+		return nil, fmt.Errorf("%w: %d, should be < %d", ErrOutOfRange, i, rp2040PadCount)
 	}
-	return r.gpios[i].Observer(), true
+	return r.gpios[i], nil
 }
 
-func (r *RP2040) GPIOConfigurator(i uint) (c gpio.Configurator, ok bool) {
+func (r *RP2040) Pad(i uint) (*pad.Pad, error) {
 	if i >= rp2040PadCount {
-		return nil, false
+		return nil, fmt.Errorf("%w: %d, should be < %d", ErrOutOfRange, i, rp2040PadCount)
 	}
-	return r.gpios[i].Configurator(), true
+	return r.pads[i], nil
 }
 
-func (r *RP2040) PadObserver(i uint) (o pad.Observer, ok bool) {
-	if i >= rp2040PadCount {
-		return nil, false
-	}
-	return r.pads[i].Observer(), true
+func (r *RP2040) Observer() RP2040Observer {
+	return r
 }
 
-func (r *RP2040) PadConfigurator(i uint) (c pad.Configurator, ok bool) {
-	if i >= rp2040PadCount {
-		return nil, false
-	}
-	return r.pads[i].Configurator(), true
+func (r *RP2040) PIOObserver(i uint) (pioblock.Observer, error) {
+	return r.PIO(i)
 }
+func (r *RP2040) GPIOObserver(i uint) (gpio.Observer, error) {
+	return r.GPIO(i)
+}
+func (r *RP2040) PadObserver(i uint) (pad.Observer, error) {
+	return r.Pad(i)
+}
+
+func (r *RP2040) Configurator() RP2040Configurator {
+	return r
+}
+
+func (r *RP2040) SetLabel(label string) { r.label = label }
+
+func (r *RP2040) PIOConfigurator(i uint) (pioblock.Configurator, error) {
+	return r.PIO(i)
+}
+func (r *RP2040) GPIOConfigurator(i uint) (gpio.Configurator, error) {
+	return r.GPIO(i)
+}
+func (r *RP2040) PadConfigurator(i uint) (pad.Configurator, error) {
+	return r.Pad(i)
+}
+func (r *RP2040) Connection(i uint) (simulation.Connection, error) {
+	return r.Pad(i)
+}
+
+func (r *RP2040) Operator() RP2040Operator {
+	return r
+}
+
+func (r *RP2040) ID() simulation.ComponentIdentifier { return r.id }
+func (r *RP2040) Label() string                      { return r.label }
 
 var ErrGPIOFunctionInvalid = errors.New("gpio function invalid")
 
 func (r *RP2040) Tick() error {
 	var pinInputs uint32
-	for i, p := range r.pads {
-		cp := p.Controller()
 
-		inputHigh := cp.GetInput()
+	for i, p := range r.pads {
+		padOperator := p.Operator()
+
+		inputHigh := padOperator.GetInput()
 		if inputHigh {
 			pinInputs |= (0b1 << i)
 		}
 
-		err := cp.Tick()
+		err := padOperator.Tick()
 		if err != nil {
-			return fmt.Errorf("pad %s: %w", cp.ID(), err)
+			return fmt.Errorf("pad [%v]: %w", padOperator.Label(), err)
 		}
 	}
 
-	for i, p := range r.pios {
-		c := p.Controller()
-		c.SetPinInputs(pinInputs)
-		err := c.Tick()
+	for _, p := range r.pioBlocks {
+		pioBlockOperator := p.Operator()
+
+		pioBlockOperator.SetPinInputs(pinInputs)
+
+		err := pioBlockOperator.Tick()
 		if err != nil {
-			return fmt.Errorf("pio %d: %w", i, err)
+			return fmt.Errorf("pio [%v]: %w", pioBlockOperator.Label(), err)
 		}
 	}
 
-	pio0C := r.pios[0].Controller()
-	pio0PinOutputs := pio0C.PinOutputs()
-	pio0PinOutputEnables := pio0C.PinOutputEnables()
-	pio1C := r.pios[1].Controller()
-	pio1PinOutputs := pio1C.PinOutputs()
-	pio1PinOutputEnables := pio1C.PinOutputEnables()
+	pio0Operator := r.pioBlocks[0].Operator()
+	pio0PinOutputs := pio0Operator.PinOutputs()
+	pio0PinOutputEnables := pio0Operator.PinOutputEnables()
+	pio1Operator := r.pioBlocks[1].Operator()
+	pio1PinOutputs := pio1Operator.PinOutputs()
+	pio1PinOutputEnables := pio1Operator.PinOutputEnables()
 
 	for i, p := range r.pads {
-		cp := p.Controller()
-		cg := r.gpios[i].Controller()
-		f := cg.GetFunction()
+		padOperator := p.Operator()
+		gpioOperator := r.gpios[i].Operator()
+		f := gpioOperator.GetFunction()
 		switch f {
 		case gpio.FunctionNone:
-			// no action
+			padOperator.SetOutput(false)
+			padOperator.SetOutputEnabled(false)
 		case gpio.FunctionPIO0:
-			outputHigh := (pio0PinOutputs>>i)&0b1 == 1
-			outputEnabled := (pio0PinOutputEnables>>i)&0b1 == 1
-			cp.SetOutput(outputHigh)
-			cp.SetOutputEnabled(outputEnabled)
+			padOperator.SetOutput((pio0PinOutputs>>i)&0b1 == 1)
+			padOperator.SetOutputEnabled((pio0PinOutputEnables>>i)&0b1 == 1)
 		case gpio.FunctionPIO1:
-			outputHigh := (pio1PinOutputs>>i)&0b1 == 1
-			outputEnabled := (pio1PinOutputEnables>>i)&0b1 == 1
-			cp.SetOutput(outputHigh)
-			cp.SetOutputEnabled(outputEnabled)
+			padOperator.SetOutput((pio1PinOutputs>>i)&0b1 == 1)
+			padOperator.SetOutputEnabled((pio1PinOutputEnables>>i)&0b1 == 1)
 		default:
-			return ErrGPIOFunctionInvalid
+			return fmt.Errorf("%w: %d", ErrGPIOFunctionInvalid, f)
 		}
 	}
 

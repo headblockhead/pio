@@ -1,9 +1,10 @@
 package pad
 
-import "github.com/headblockhead/pio/conn"
+import "github.com/headblockhead/pio/simulation"
 
 type Observer interface {
-	ID() string
+	simulation.Component
+
 	PulledUp() bool
 	PulledDown() bool
 	OutputDisabled() bool
@@ -12,11 +13,13 @@ type Observer interface {
 	OutputEnabled() bool
 	Output() bool
 
-	StateHistory() []conn.State
+	StateHistory() []simulation.ConnectionState
 	InputHistory() []bool
 }
 
 type Configurator interface {
+	SetLabel(string)
+
 	SetPullUp(bool)
 	SetPullDown(bool)
 	SetOutputDisabled(bool)
@@ -25,39 +28,39 @@ type Configurator interface {
 	SetInputDelayCycles(uint)
 }
 
-type Controller interface {
-	ID() string
+type Operator interface {
+	simulation.Component
+	simulation.Ticker
 
 	SetOutputEnabled(bool)
 	SetOutput(bool)
 	GetInput() bool
-
-	Tick() error
 }
 
-func padState(shouldOutput bool, outputValue bool, pullUp bool, pullDown bool) conn.State {
+func padState(shouldOutput bool, outputValue bool, pullUp bool, pullDown bool) simulation.ConnectionState {
 	if shouldOutput {
 		if outputValue {
-			return conn.StateOutHigh
+			return simulation.ConnectionStateOutHigh
 		} else {
-			return conn.StateOutLow
+			return simulation.ConnectionStateOutLow
 		}
 	} else {
 		if pullUp && pullDown {
-			return conn.StateBusKeeper
+			return simulation.ConnectionStateBusKeeper
 		}
 		if pullUp {
-			return conn.StatePullUp
+			return simulation.ConnectionStatePullUp
 		}
 		if pullDown {
-			return conn.StatePullDown
+			return simulation.ConnectionStatePullDown
 		}
-		return conn.StateNone
+		return simulation.ConnectionStateNone
 	}
 }
 
 type Pad struct {
-	id string
+	id    simulation.ComponentIdentifier
+	label string
 
 	pullUp         bool
 	pullDown       bool
@@ -67,40 +70,53 @@ type Pad struct {
 	outputEnabled bool
 	output        bool
 
-	stateHistory []conn.State
+	stateHistory []simulation.ConnectionState
 	inputHistory []bool
 }
 
-func NewPad(id string) *Pad {
+func New(label string) *Pad {
 	return &Pad{
-		id: id,
+		id:    simulation.NewComponentIdentifier(),
+		label: label,
 
-		pullDown:     true,
-		inputEnabled: true,
+		pullUp:         false,
+		pullDown:       true,
+		outputDisabled: false,
+		inputEnabled:   true,
 
-		stateHistory: make([]conn.State, 2),
-		inputHistory: make([]bool, 2),
+		outputEnabled: false,
+		output:        false,
+
+		stateHistory: []simulation.ConnectionState{simulation.ConnectionStatePullDown, simulation.ConnectionStatePullDown},
+		inputHistory: []bool{false, false},
 	}
 }
+
+func (p *Pad) Component() simulation.Component {
+	return p
+}
+
+func (p *Pad) ID() simulation.ComponentIdentifier { return p.id }
+func (p *Pad) Label() string                      { return p.label }
 
 func (p *Pad) Observer() Observer {
 	return p
 }
 
-func (p *Pad) ID() string                 { return p.id }
-func (p *Pad) PulledUp() bool             { return p.pullUp }
-func (p *Pad) PulledDown() bool           { return p.pullDown }
-func (p *Pad) OutputDisabled() bool       { return p.outputDisabled }
-func (p *Pad) InputEnabled() bool         { return p.inputEnabled }
-func (p *Pad) OutputEnabled() bool        { return p.outputEnabled }
-func (p *Pad) Output() bool               { return p.output }
-func (p *Pad) StateHistory() []conn.State { return p.stateHistory }
-func (p *Pad) InputHistory() []bool       { return p.inputHistory }
+func (p *Pad) PulledUp() bool                             { return p.pullUp }
+func (p *Pad) PulledDown() bool                           { return p.pullDown }
+func (p *Pad) OutputDisabled() bool                       { return p.outputDisabled }
+func (p *Pad) InputEnabled() bool                         { return p.inputEnabled }
+func (p *Pad) OutputEnabled() bool                        { return p.outputEnabled }
+func (p *Pad) Output() bool                               { return p.output }
+func (p *Pad) StateHistory() []simulation.ConnectionState { return p.stateHistory }
+func (p *Pad) InputHistory() []bool                       { return p.inputHistory }
 
 func (p *Pad) Configurator() Configurator {
 	return p
 }
 
+func (p *Pad) SetLabel(label string)                 { p.label = label }
 func (p *Pad) SetPullUp(pullUp bool)                 { p.pullUp = pullUp }
 func (p *Pad) SetPullDown(pullDown bool)             { p.pullDown = pullDown }
 func (p *Pad) SetOutputDisabled(outputDisabled bool) { p.outputDisabled = outputDisabled }
@@ -122,7 +138,7 @@ func (p *Pad) SetInputDelayCycles(c uint) {
 	}
 }
 
-func (p *Pad) Controller() Controller {
+func (p *Pad) Operator() Operator {
 	return p
 }
 
@@ -144,9 +160,9 @@ func (p *Pad) Tick() error {
 	return nil
 }
 
-func (p *Pad) Connection() conn.Connection {
+func (p *Pad) Connection() simulation.Connection {
 	return p
 }
 
-func (p *Pad) GetState() conn.State { return p.stateHistory[len(p.stateHistory)-1] }
-func (p *Pad) SetInput(input bool)  { p.inputHistory[0] = input }
+func (p *Pad) State() simulation.ConnectionState { return p.stateHistory[len(p.stateHistory)-1] }
+func (p *Pad) SetInput(logicLevel bool)          { p.inputHistory[0] = logicLevel }

@@ -3,7 +3,7 @@ package gpio
 import "testing"
 
 func TestNewGPIO(t *testing.T) {
-	gpio := NewGPIO()
+	gpio := New()
 	if gpio.outputEnableOverride != OverrideNone {
 		t.Errorf("expected outputEnableOverride to be OverrideNone, got %v", gpio.outputEnableOverride)
 	}

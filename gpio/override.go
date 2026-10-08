@@ -27,5 +27,5 @@ func (o Override) ApplyTo(v bool) (bool, error) {
 	case OverrideAlways1:
 		return true, nil
 	}
-	return v, fmt.Errorf("%w: %d", ErrOverrideInvalid, o)
+	return v, fmt.Errorf("%w: %v", ErrOverrideInvalid, o)
 }

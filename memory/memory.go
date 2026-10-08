@@ -1,6 +1,9 @@
 package memory
 
-import "errors"
+import (
+	"errors"
+	"fmt"
+)
 
 type Observer interface {
 	Size() uint
@@ -21,7 +24,7 @@ type Memory struct {
 	initialized []bool
 }
 
-func NewMemory(size uint) *Memory {
+func New(size uint) *Memory {
 	return &Memory{
 		data:        make([]uint16, size),
 		initialized: make([]bool, size),
@@ -45,10 +48,10 @@ var ErrValueUninitialized = errors.New("value uninitialized")
 
 func (m *Memory) Read(address uint) (uint16, error) {
 	if address >= m.Size() {
-		return 0, ErrOutOfBounds
+		return 0, fmt.Errorf("address %d: %w", address, ErrOutOfBounds)
 	}
 	if !m.initialized[address] {
-		return 0, ErrValueUninitialized
+		return 0, fmt.Errorf("address %d: %w", address, ErrValueUninitialized)
 	}
 	return m.data[address], nil
 }
@@ -59,7 +62,7 @@ func (m *Memory) Writer() Writer {
 
 func (m *Memory) Write(address uint, value uint16) error {
 	if address >= m.Size() {
-		return ErrOutOfBounds
+		return fmt.Errorf("address %d: %w", address, ErrOutOfBounds)
 	}
 	m.data[address] = value
 	m.initialized[address] = true
