@@ -86,7 +86,7 @@ func TestReadWriteLevel(t *testing.T) {
 			t.Errorf("expected error ErrFIFOEmpty, got %v", err)
 		}
 		if fifo0.Level() != 0 {
-			t.Errorf("exepcted fifo of size 0 to have level 0")
+			t.Errorf("expected fifo of size 0 to have level 0")
 		}
 	})
 

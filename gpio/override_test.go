@@ -6,8 +6,8 @@ import (
 )
 
 func TestOverride(t *testing.T) {
-	var nonExistantOverride Override = 0
-	nonExistantOverride -= 1
+	var nonExistentOverride Override = 0
+	nonExistentOverride -= 1
 
 	overrideTests := []struct {
 		name           string
@@ -24,8 +24,8 @@ func TestOverride(t *testing.T) {
 		{name: "always0_false", override: OverrideAlways0, input: false, expectedOutput: false, expectedError: nil},
 		{name: "always1_true", override: OverrideAlways1, input: true, expectedOutput: true, expectedError: nil},
 		{name: "always1_false", override: OverrideAlways1, input: false, expectedOutput: true, expectedError: nil},
-		{name: "error_true", override: nonExistantOverride, input: true, expectedOutput: true, expectedError: ErrOverrideInvalid},
-		{name: "error_false", override: nonExistantOverride, input: false, expectedOutput: false, expectedError: ErrOverrideInvalid},
+		{name: "error_true", override: nonExistentOverride, input: true, expectedOutput: true, expectedError: ErrOverrideInvalid},
+		{name: "error_false", override: nonExistentOverride, input: false, expectedOutput: false, expectedError: ErrOverrideInvalid},
 	}
 
 	for _, testCase := range overrideTests {
