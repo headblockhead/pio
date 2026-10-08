@@ -1,6 +1,8 @@
 package pad
 
-import "github.com/headblockhead/pio/simulation"
+import (
+	"github.com/headblockhead/pio/simulation"
+)
 
 type Observer interface {
 	simulation.Component

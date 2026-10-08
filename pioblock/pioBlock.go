@@ -25,6 +25,9 @@ type Configurator interface {
 	SetLabel(string)
 	MemoryWriter() memory.Writer
 	StateMachineConfigurator(uint) (statemachine.Configurator, error)
+
+	SetPinOutput(uint, bool) error
+	SetPinOutputEnable(uint, bool) error
 }
 
 type Operator interface {
@@ -74,6 +77,13 @@ func New(label string, memorySize uint, numberOfStateMachines uint) *PIOBlock {
 	return p
 }
 
+func (p *PIOBlock) StateMachine(i uint) (*statemachine.StateMachine, error) {
+	if i >= uint(len(p.stateMachines)) {
+		return nil, fmt.Errorf("%d: %w", i, ErrOutOfRange)
+	}
+	return p.stateMachines[i], nil
+}
+
 func (p *PIOBlock) Observer() Observer {
 	return p
 }
@@ -83,10 +93,7 @@ func (p *PIOBlock) MemoryObserver() memory.Observer { return p.memory.Observer()
 var ErrOutOfRange = errors.New("out of range")
 
 func (p *PIOBlock) StateMachineObserver(i uint) (statemachine.Observer, error) {
-	if i >= uint(len(p.stateMachines)) {
-		return nil, fmt.Errorf("%d: %w", i, ErrOutOfRange)
-	}
-	return p.stateMachines[i].Observer(), nil
+	return p.StateMachine(i)
 }
 
 func (p *PIOBlock) IRQs() uint8              { return p.irqs }
@@ -98,15 +105,34 @@ func (p *PIOBlock) Configurator() Configurator {
 	return p
 }
 
-func (p *PIOBlock) SetLabel(label string) { p.label = label }
-
+func (p *PIOBlock) SetLabel(label string)       { p.label = label }
 func (p *PIOBlock) MemoryWriter() memory.Writer { return p.memory.Writer() }
-
 func (p *PIOBlock) StateMachineConfigurator(i uint) (statemachine.Configurator, error) {
-	if i >= uint(len(p.stateMachines)) {
-		return nil, fmt.Errorf("%d: %w", i, ErrOutOfRange)
+	return p.StateMachine(i)
+}
+
+func (p *PIOBlock) SetPinOutput(i uint, v bool) error {
+	if i > 31 {
+		return fmt.Errorf("%w: %d, should be < 32", ErrOutOfRange, i)
 	}
-	return p.stateMachines[i].Configurator(), nil
+	if v {
+		p.pinOutputs |= (0b1 << i)
+	} else {
+		p.pinOutputs &= ^(0b1 << i)
+	}
+	return nil
+}
+
+func (p *PIOBlock) SetPinOutputEnable(i uint, v bool) error {
+	if i > 31 {
+		return fmt.Errorf("%w: %d, should be < 32", ErrOutOfRange, i)
+	}
+	if v {
+		p.pinOutputEnables |= (0b1 << i)
+	} else {
+		p.pinOutputEnables &= ^(0b1 << i)
+	}
+	return nil
 }
 
 func (p *PIOBlock) Operator() Operator {

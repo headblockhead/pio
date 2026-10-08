@@ -86,6 +86,9 @@ type Observer interface {
 type Configurator interface {
 	SetLabel(string)
 
+	FIFORXReader() fifo.Reader
+	FIFOTXWriter() fifo.Writer
+
 	Restart()
 	SetEnabled(bool)
 	SetSidesetIsOptional(bool)
@@ -149,8 +152,8 @@ type StateMachine struct {
 	index uint
 
 	memoryReader memory.Reader
-	fifoRX       fifo.Writer
-	fifoTX       fifo.Reader
+	fifoRX       *fifo.FIFO
+	fifoTX       *fifo.FIFO
 
 	pinInputs uint32
 	irqInputs uint8
@@ -299,6 +302,13 @@ func New(index uint, label string, memoryReader memory.Reader) *StateMachine {
 	}
 }
 
+func (sm *StateMachine) FIFORX() *fifo.FIFO {
+	return sm.fifoRX
+}
+func (sm *StateMachine) FIFOTX() *fifo.FIFO {
+	return sm.fifoTX
+}
+
 func (sm *StateMachine) Observer() Observer {
 	return sm
 }
@@ -388,6 +398,9 @@ func (sm *StateMachine) Configurator() Configurator {
 }
 
 func (sm *StateMachine) SetLabel(label string) { sm.label = label }
+
+func (sm *StateMachine) FIFORXReader() fifo.Reader { return sm.fifoRX.Reader() }
+func (sm *StateMachine) FIFOTXWriter() fifo.Writer { return sm.fifoTX.Writer() }
 
 func (sm *StateMachine) Restart() {
 	sm.inputShiftRegisterCounter = 0
@@ -635,7 +648,7 @@ func (sm *StateMachine) Tick() error {
 	if sm.newForcedInstruction {
 		jumped, stalled, stalledIRQ, err := sm.execute(sm.forcedInstruction, false)
 		if err != nil {
-			return fmt.Errorf("error executing forced instruction: %w", err)
+			return fmt.Errorf("error executing forced instruction %016b: %w", sm.forcedInstruction, err)
 		}
 		sm.newForcedInstruction = false
 		sm.jumped = jumped
@@ -649,7 +662,7 @@ func (sm *StateMachine) Tick() error {
 	} else if sm.forcedInstructionStalled {
 		jumped, stalled, stalledIRQ, err := sm.execute(sm.latchedInstruction, true)
 		if err != nil {
-			return fmt.Errorf("error executing stalled forced instruction: %w", err)
+			return fmt.Errorf("error executing stalled forced instruction %016b: %w", sm.latchedInstruction, err)
 		}
 		sm.jumped = jumped
 		sm.forcedInstructionStalled = stalled || stalledIRQ
@@ -673,7 +686,7 @@ func (sm *StateMachine) dividedTick() error {
 	if sm.newEXECdInstruction {
 		jumped, stalled, stalledIRQ, err := sm.execute(sm.latchedInstruction, false)
 		if err != nil {
-			return fmt.Errorf("error executing EXEC'd instruction: %w", err)
+			return fmt.Errorf("error executing EXEC'd instruction %016b: %w", sm.latchedInstruction, err)
 		}
 		sm.newEXECdInstruction = false
 		sm.jumped = jumped
@@ -681,20 +694,20 @@ func (sm *StateMachine) dividedTick() error {
 	} else if sm.execdInstructionStalled {
 		jumped, stalled, stalledIRQ, err := sm.execute(sm.latchedInstruction, true)
 		if err != nil {
-			return fmt.Errorf("error executing stalled EXEC'd instruction: %w", err)
+			return fmt.Errorf("error executing stalled EXEC'd instruction %016b: %w", sm.latchedInstruction, err)
 		}
 		sm.jumped = jumped
 		sm.execdInstructionStalled = stalled || stalledIRQ
 	} else if sm.stalled || sm.stalledIRQ {
 		instr, err := sm.memoryReader.Read(sm.programCounter)
 		if err != nil {
-			return fmt.Errorf("error reading address %d of instruction memory: %w", sm.programCounter, err)
+			return fmt.Errorf("error reading instruction memory: %w", err)
 		}
 		jumped, stalled, stalledIRQ, err := sm.execute(instr, true)
 		if err != nil {
-			return fmt.Errorf("error executing stalled instruction: %w", err)
+			return fmt.Errorf("error executing stalled instruction %016b: %w", instr, err)
 		}
-		if !jumped && !(stalled || stalledIRQ) {
+		if !jumped && !stalled && !stalledIRQ {
 			sm.incrementProgramCounter()
 		}
 		sm.jumped = jumped
@@ -705,13 +718,13 @@ func (sm *StateMachine) dividedTick() error {
 	} else {
 		instr, err := sm.memoryReader.Read(sm.programCounter)
 		if err != nil {
-			return fmt.Errorf("error reading address %d of instruction memory: %w", sm.programCounter, err)
+			return fmt.Errorf("error reading instruction memory: %w", err)
 		}
 		jumped, stalled, stalledIRQ, err := sm.execute(instr, false)
 		if err != nil {
-			return fmt.Errorf("error executing instruction: %w", err)
+			return fmt.Errorf("error executing instruction %016b at address %d: %w", instr, sm.programCounter, err)
 		}
-		if !jumped && !(stalled || stalledIRQ) {
+		if !jumped && !stalled && !stalledIRQ {
 			sm.incrementProgramCounter()
 		}
 		sm.jumped = jumped
@@ -834,8 +847,8 @@ func (sm *StateMachine) execute(instr uint16, currentlyStalled bool) (jumped boo
 		if sm.sidesetIsOptional {
 			pinCount -= 1
 		}
-		var pinData uint32 = bits.RotateLeft32(uint32(sidesetData), int(sm.baseSidesetPin))
-		var pinMask uint32 = bits.RotateLeft32((0b1<<pinCount)-1, int(sm.baseSidesetPin))
+		var pinData = bits.RotateLeft32(uint32(sidesetData), int(sm.baseSidesetPin))
+		var pinMask = bits.RotateLeft32((0b1<<pinCount)-1, int(sm.baseSidesetPin))
 		sm.pinSidesets = pinData
 		sm.pinSidesetsMask = pinMask
 	}
@@ -859,8 +872,8 @@ func (sm *StateMachine) incrementProgramCounter() {
 	}
 }
 
-var ErrXRegisterNotInitialized = errors.New("X register not initialized")
-var ErrYRegisterNotInitialized = errors.New("Y register not initialized")
+var ErrXRegisterNotInitialized = errors.New("x register not initialized")
+var ErrYRegisterNotInitialized = errors.New("y register not initialized")
 
 type jumpCondition uint
 
@@ -1084,8 +1097,8 @@ func (sm *StateMachine) executeOut(destination outDestination, count uint) (jump
 		}
 	}
 
-	var pinData uint32 = bits.RotateLeft32(data, int(sm.baseOutPin))
-	var pinMask uint32 = bits.RotateLeft32((0b1<<sm.pinCountOut)-1, int(sm.baseOutPin))
+	var pinData = bits.RotateLeft32(data, int(sm.baseOutPin))
+	var pinMask = bits.RotateLeft32((0b1<<sm.pinCountOut)-1, int(sm.baseOutPin))
 
 	switch destination {
 	case outDestinationPins:
@@ -1187,6 +1200,11 @@ var ErrMoveOperationInvalid = errors.New("move operation invalid")
 var ErrMoveDestinationInvalid = errors.New("move destination invalid")
 
 func (sm *StateMachine) executeMove(destination moveDestination, operation moveOperation, source moveSource) (jumped bool, err error) {
+	if isNOP := source == moveSourceY && operation == moveOperationNone && destination == moveDestinationY; isNOP {
+		// ignore NOP moves, so that ErrYRegisterNotInitialized doesn't interfere with a NOP.
+		return false, nil
+	}
+
 	var sourceData uint32
 	switch source {
 	case moveSourcePins:
@@ -1326,8 +1344,8 @@ const (
 var ErrSetDestinationInvalid = errors.New("set destination invalid")
 
 func (sm *StateMachine) executeSet(destination setDestination, data uint) error {
-	var pinData uint32 = bits.RotateLeft32(uint32(data), int(sm.baseSetPin))
-	var pinMask uint32 = bits.RotateLeft32((0b1<<sm.pinCountSet)-1, int(sm.baseSetPin))
+	var pinData = bits.RotateLeft32(uint32(data), int(sm.baseSetPin))
+	var pinMask = bits.RotateLeft32((0b1<<sm.pinCountSet)-1, int(sm.baseSetPin))
 	switch destination {
 	case setDestinationPins:
 		sm.pinOutputs = pinData
