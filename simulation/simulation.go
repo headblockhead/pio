@@ -12,15 +12,15 @@ type Ticker interface {
 }
 
 type SimulationObserver interface {
-	Nets() map[ComponentIdentifier]Net
+	Nets() map[ComponentIdentifier]*Net
 	Tickers() map[ComponentIdentifier]Ticker
 }
 
 type SimulationConfigurator interface {
-	AddNet(net Net) error
-	RemoveNet(net Net) error
-	AddTicker(ticker Ticker) error
-	RemoveTicker(ticker Ticker) error
+	AddNet(*Net) error
+	RemoveNet(*Net) error
+	AddTicker(Ticker) error
+	RemoveTicker(Ticker) error
 }
 
 type SimulationOperator interface {
@@ -28,13 +28,13 @@ type SimulationOperator interface {
 }
 
 type Simulation struct {
-	nets    map[ComponentIdentifier]Net
+	nets    map[ComponentIdentifier]*Net
 	tickers map[ComponentIdentifier]Ticker
 }
 
 func New() *Simulation {
 	return &Simulation{
-		nets:    make(map[ComponentIdentifier]Net),
+		nets:    make(map[ComponentIdentifier]*Net),
 		tickers: make(map[ComponentIdentifier]Ticker),
 	}
 }
@@ -43,7 +43,7 @@ func (s *Simulation) Observer() SimulationObserver {
 	return s
 }
 
-func (s *Simulation) Nets() map[ComponentIdentifier]Net       { return s.nets }
+func (s *Simulation) Nets() map[ComponentIdentifier]*Net      { return s.nets }
 func (s *Simulation) Tickers() map[ComponentIdentifier]Ticker { return s.tickers }
 
 func (s *Simulation) Configurator() SimulationConfigurator {
@@ -52,7 +52,7 @@ func (s *Simulation) Configurator() SimulationConfigurator {
 
 var ErrSimulationNetAlreadyAdded = errors.New("already added")
 
-func (s *Simulation) AddNet(net Net) error {
+func (s *Simulation) AddNet(net *Net) error {
 	if _, exists := s.nets[net.ID()]; exists {
 		return fmt.Errorf("net [%v]: %w", net.Label(), ErrSimulationNetAlreadyAdded)
 	}
@@ -62,7 +62,7 @@ func (s *Simulation) AddNet(net Net) error {
 
 var ErrSimulationNetNotCurrentlyAdded = errors.New("not currently added")
 
-func (s *Simulation) RemoveNet(net Net) error {
+func (s *Simulation) RemoveNet(net *Net) error {
 	if _, exists := s.nets[net.ID()]; !exists {
 		return fmt.Errorf("net [%v]: %w", net.Label(), ErrSimulationNetNotCurrentlyAdded)
 	}
@@ -95,6 +95,11 @@ func (s *Simulation) Operator() SimulationOperator {
 }
 
 func (s *Simulation) Tick() error {
+	for _, net := range s.nets {
+		if err := net.Solve(); err != nil {
+			return fmt.Errorf("net [%v]: %w", net.Label(), err)
+		}
+	}
 	for _, ticker := range s.tickers {
 		if err := ticker.Tick(); err != nil {
 			return fmt.Errorf("ticker [%v]: %w", ticker.Label(), err)

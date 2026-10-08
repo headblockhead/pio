@@ -6,7 +6,7 @@ import (
 )
 
 func TestOverride(t *testing.T) {
-	var nonExistantOverride Override = Override(0)
+	var nonExistantOverride Override = 0
 	nonExistantOverride -= 1
 
 	overrideTests := []struct {

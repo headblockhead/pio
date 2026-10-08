@@ -17,6 +17,7 @@ type Reader interface {
 
 type Writer interface {
 	Write(address uint, value uint16) error
+	Copy(source []uint16, destinationStartAddress uint) error
 }
 
 type Memory struct {
@@ -66,5 +67,18 @@ func (m *Memory) Write(address uint, value uint16) error {
 	}
 	m.data[address] = value
 	m.initialized[address] = true
+	return nil
+}
+
+var ErrExceedsMemorySize = errors.New("exceeds memory size")
+
+func (m *Memory) Copy(source []uint16, destinationStartAddress uint) error {
+	if destinationStartAddress+uint(len(source)) > m.Size() {
+		return fmt.Errorf("destination start address %d with length %d: %w", destinationStartAddress, len(source), ErrExceedsMemorySize)
+	}
+	for i, value := range source {
+		m.data[destinationStartAddress+uint(i)] = value
+		m.initialized[destinationStartAddress+uint(i)] = true
+	}
 	return nil
 }
