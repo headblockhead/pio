@@ -9,10 +9,11 @@ See [pio-gtk](https://github.com/headblockhead/pio-gtk) for a GUI version.
 
 ### Features
 
-- Simultaneous emulation of multiple electrically-interconnected RP2040s.
-- Complete emulation of the RP2040's PIO block, including all state machines.
-- Full GPIO feature simulation (pull-ups, pull-downs, overrides).
-- Cycle-accurate emulation, even when using clock-dividers.
+- Multiple electrically-interconnected RP2040s.
+- Complete PIO block (all state machines).
+- GPIO feature simulation (pull-ups, pull-downs, overrides).
+- Cycle-accurate emulation.
+- Support for clock-dividers.
 - Usable inside of test suites or as part of another program.
 - Provides errors in potentially unintended scenarios (such as performing an undefined operation, or using the value of an uninitialised register).
 
