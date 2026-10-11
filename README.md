@@ -3,7 +3,6 @@
 A Go package that emulates the RP2040's PIO hardware.
 
 See the [examples](examples) for usage.
-See [pio-gtk](https://github.com/headblockhead/pio-gtk) for a GUI version.
 
 ## Features, Accuracy, and Limitations
 
@@ -27,4 +26,16 @@ Instead, this emulator opts to use a simplified digital model, which is enough t
 
 Some areas of the PIO's logic are not fully publicly documented in as thorough detail as the rest, and while most of the time I was able to confirm using actual hardware, some educated assumptions have been used in areas where documentation is particularly lacking, and the functionality is inconvenient to create a hardware test for (I'm looking at you, `OUT_STICKY` and `INLINE_OUT_EN`). This should not affect functionality in the vast majority of cases.
 
-Finally, this package does not (yet) include an assembler. This means that instructions must be converted to bytecode before they are run using this emulator. This may change in the future.
+This package does not (yet) include an assembler. This means that instructions must be converted to bytecode before they are run using this emulator. This may change in the future.
+
+Finally, this package does not come with a GUI, however it would be nice to be able to interact with the features of this package using a GUI in the future.
+I have created a repo ([pio-gtk](https://github.com/headblockhead/pio-gtk)) in which I may build a GUI when I have the time.
+
+If you would like to help write an assembler into this package, feel free to fork and create a PR!
+If you would like to help build a GUI around this package, I would appreciate design drafts directed at the [pio-gtk](https://github.com/headblockhead/pio-gtk) repository.
+
+## Licensing
+
+This project is licensed under the GNU AGPLv3 licence.
+In short, if you use this package as part of your project, you must also licence your project under a copyleft licence.
+See [LICENSE.md](LICENSE.md) for more information.
