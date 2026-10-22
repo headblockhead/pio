@@ -4,6 +4,8 @@ A Go package that emulates the RP2040's PIO hardware.
 
 See the [examples](examples) for usage.
 
+https://github.com/user-attachments/assets/872627d4-4d8b-4c4e-aa50-86241025c8b2
+
 ## Features, Accuracy, and Limitations
 
 ### Features
@@ -37,5 +39,5 @@ If you would like to help build a GUI around this package, I would appreciate de
 ## Licensing
 
 This project is licensed under the GNU AGPLv3 licence.
-In short, if you use this package as part of your project, you must also licence your project under a copyleft licence.
+In short, if you use this package as part of your project, you must also license your project under a copyleft licence.
 See [LICENSE.md](LICENSE.md) for more information.
