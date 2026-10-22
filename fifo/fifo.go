@@ -16,16 +16,16 @@ type Observer interface {
 type Reader interface {
 	Observer() Observer
 	Read() (uint32, error)
-	Level() uint
 	IsEmpty() bool
+
 	Resize(size uint)
 }
 
 type Writer interface {
 	Observer() Observer
 	Write(uint32) error
-	Level() uint
 	IsFull() bool
+
 	Resize(size uint)
 }
 

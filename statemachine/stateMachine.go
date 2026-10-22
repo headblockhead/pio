@@ -1200,22 +1200,17 @@ var ErrMoveOperationInvalid = errors.New("move operation invalid")
 var ErrMoveDestinationInvalid = errors.New("move destination invalid")
 
 func (sm *StateMachine) executeMove(destination moveDestination, operation moveOperation, source moveSource) (jumped bool, err error) {
-	if isNOP := source == moveSourceY && operation == moveOperationNone && destination == moveDestinationY; isNOP {
-		// ignore NOP moves, so that ErrYRegisterNotInitialized doesn't interfere with a NOP.
-		return false, nil
-	}
-
 	var sourceData uint32
 	switch source {
 	case moveSourcePins:
 		sourceData = bits.RotateLeft32(sm.pinInputs, -int(sm.baseInPin))
 	case moveSourceX:
-		if !sm.xRegisterInitialized {
+		if !sm.xRegisterInitialized && destination != moveDestinationX {
 			return false, ErrXRegisterNotInitialized
 		}
 		sourceData = sm.xRegister
 	case moveSourceY:
-		if !sm.yRegisterInitialized {
+		if !sm.yRegisterInitialized && destination != moveDestinationY {
 			return false, ErrYRegisterNotInitialized
 		}
 		sourceData = sm.yRegister
@@ -1276,10 +1271,14 @@ func (sm *StateMachine) executeMove(destination moveDestination, operation moveO
 		}
 	case moveDestinationX:
 		sm.xRegister = modifiedData
-		sm.xRegisterInitialized = true
+		if source != moveSourceX {
+			sm.xRegisterInitialized = true
+		}
 	case moveDestinationY:
 		sm.yRegister = modifiedData
-		sm.yRegisterInitialized = true
+		if source != moveSourceY {
+			sm.yRegisterInitialized = true
+		}
 	case moveDestinationEXEC:
 		sm.latchedInstruction = uint16(modifiedData)
 		sm.newEXECdInstruction = true
