@@ -1,7 +1,8 @@
 package main
 
 import (
-	"fmt"
+	"math/rand/v2"
+	"time"
 
 	"github.com/headblockhead/pio"
 	"github.com/headblockhead/pio/gpio"
@@ -10,7 +11,6 @@ import (
 )
 
 // programTX and programRX are exact assembled versions of the differential_manchester example from commit 7fe60d6 of the Raspberry Pi pico-examples GitHub repository.
-// See README.md for how this code deviates from the official example.
 
 var programTX = []uint16{
 	//     .wrap_target
@@ -48,95 +48,92 @@ var programRX = []uint16{
 const programRXWrapFrom = 9
 const programRXWrapTo = 5
 
-var aPin uint = 2
-var bPin uint = 3
-
 // Errors are ignored throughout this example to help readability.
-// Where errors are ignored, an underscore is used to demonstrate that the return value is intentionally being ignored.
+// Where errors are ignored, an underscore is used to demonstrate that the return value is intentionally not used.
 // Please note that you should not normally ignore errors when using this package.
 
 func main() {
 	// Create a new simulation environment.
+	// A simulation may contain many RP2040s, and many nets to electrically connect those RP2040s.
+	// A simulation can be 'ticked', where each tick is equivalent to one CPU cycle of all RP2040s.
+	// (Note that you may choose not to use the simulation structure whatsoever, RP2040s and nets can be ticked and solved without it, it just provides a convenient way to 'tick' many things at the same time.)
 	s := simulation.New()
 
-	// Setup both RP2040s' initial states.
-	rA := setupRP2040A()
-	rB := setupRP2040B()
+	// Create both RP2040s, and setup their configurations.
+	// See the functions setupA/B at the end of this file for details.
+	rA := pio.NewRP2040("RP2040 A (TX)")
+	setupA(rA)
+	rB := pio.NewRP2040("RP2040 B (RX)")
+	setupB(rB)
 
-	// Attach the RP2040s to the simulation instance so that they can be ticked collectively easily.
+	// Attach the RP2040s to the simulation instance so that they can be ticked by/with the simulation.
+	// Note that anything which implements the simulation.Ticker interface can be ticked using a simulation, meaning you man implement your own tickable structures and add them, if you desire.
 	_ = s.AddTicker(rA)
 	_ = s.AddTicker(rB)
 
-	// Create a shared net for the RP2040s to communicate over, and add it to the simulation so it will be solved each tick.
+	// Create a shared net for the RP2040s to communicate over, and add it to the simulation.
+	// A net attaches multiple connections (eg RP2040 GPIOs) together, like wiring things together on a breadboard.
+	// A net combines the output signal of many connections together to form a single shared state, which is used as the input of those connections.
+	// The process of finding the shared state is called 'solving' the net.
+	// Adding a net to the simulation means that it will be solved whenever the simulation is ticked.
+	// Note that anything which implements the simulation.Connection interface can be added to a net, meaning you may implement your own connections and add them, if you desire.
 	signalNet := simulation.NewNet("BMC Signal")
 	_ = s.AddNet(signalNet)
 
-	// Attach both RP2040s to the net.
-	conA, _ := rA.Connection(aPin)
+	// Attach pin 2 on RP2040 A to the signal net.
+	conA, _ := rA.Connection(2)
 	_ = signalNet.Connect(conA)
-	conB, _ := rB.Connection(bPin)
+
+	// Attach pin 5 on RP2040 B to the signal net.
+	conB, _ := rB.Connection(5)
 	_ = signalNet.Connect(conB)
 
 	// The simulation is now ready!
-	// To run the simulation, use the Tick function.
-	// Each Tick is equivalent to one cycle of the rp2040's system clock.
+	// Both RP2040s have been setup, and are electrically connected.
 
-	// In this simulation, RP2040 A will transmit three 32-bit words out from its TX FIFO and over signalNet to RP2040 B, which will receive them into its RX FIFO.
-	// The value of the signal net connecting RP2040 A and B will be printed to the console each tick using "." for low and "#" for high.
-	// When RP2040 B receives a word, it will be printed to the console along with the tick cycle in which it was received.
+	// In this example, RP2040 A will transmit many 32-bit words out from its TX FIFO and over the signalNet to RP2040 B, which will receive them into its RX FIFO.
+	// The internal state of RP2040 A and RP2040 B's relevant state machines will be displayed in the terminal.
+	// Additionally, the value of the signal net connecting RP2040 A and B will be displayed beneath, so that the transmission is clearly visible.
 
 	aPIO0, _ := rA.PIO(0)
 	aSM0, _ := aPIO0.StateMachine(0)
-
-	tx := aSM0.FIFOTXWriter()
-	_ = tx.Write(0x00000000) // pio_sm_put_blocking
-	_ = tx.Write(0x0ff0a55a) // pio_sm_put_blocking
-	_ = tx.Write(0x12345678) // pio_sm_put_blocking
+	aTXWriter := aSM0.FIFOTXWriter()
 
 	bPIO0, _ := rB.PIO(0)
 	bSM0, _ := bPIO0.StateMachine(0)
 	bRXReader := bSM0.FIFORXReader()
 
-	ticksToRun := 2500
-	for i := range ticksToRun {
-		// Tick the simulation forward one cycle.
+	// The simulation will be run forever until it is manually stopped.
+	for true {
+		// Draw the state to the terminal. (see tui.go)
+		programStateDraw(programStateRender(aSM0, bSM0, signalNet.LogicLevel()))
+
+		// If RP2040 A's TX FIFO is not full, it will be given another word to transmit.
+		if !aTXWriter.IsFull() {
+			aTXWriter.Write(rand.Uint32())
+		}
+
+		// Tick the whole simulation forward one cycle.
 		err := s.Tick()
 		if err != nil {
 			panic(err)
 		}
 
-		// Every 100 ticks, print the current tick number and create a new line.
-		if i%100 == 0 {
-			if i != 0 {
-				fmt.Print("\n")
-			}
-			fmt.Printf("Tick %04d: ", i)
-		}
-
-		// Print the current value of the signal net each tick.
-		if signalNet.LogicLevel() {
-			fmt.Print("#")
-		} else {
-			fmt.Print(".")
-		}
-
 		// If RP2040 B's RX FIFO is not empty, it has received a word.
 		if !bRXReader.IsEmpty() {
-			// Read the word from RP2040 B's RX FIFO and print it to the console.
-			data, _ := bRXReader.Read() // pio_sm_get_blocking
-			fmt.Printf("\n\nRP2040 B Received 0x%08X on tick %d\n\n           ", data, i)
-			for range i%100 + 1 {
-				fmt.Print(" ")
-			}
+			// Read the word from RP2040 B's RX FIFO.
+			incomingWord, _ := bRXReader.Read() // pio_sm_get_blocking
+			// The word is discarded here in this example.
+			_ = incomingWord
 		}
-	}
 
-	fmt.Printf("\n\n%d ticks executed.\n", ticksToRun)
+		// Wait 16ms inbetween each tick so the terminal output is visible.
+		time.Sleep(16 * time.Millisecond)
+	}
 }
 
-func setupRP2040A() *pio.RP2040 {
-	r := pio.NewRP2040("RP2040 A (TX)")
-
+func setupA(r *pio.RP2040) {
+	var aPin uint = 2
 	pio0, _ := r.PIO(0)
 
 	mw := pio0.MemoryWriter()
@@ -175,13 +172,10 @@ func setupRP2040A() *pio.RP2040 {
 	sm0.ForceInstruction(blockingPullInstruction)           // pio_sm_exec
 
 	sm0.SetEnabled(true) // pio_sm_set_enabled
-
-	return r
 }
 
-func setupRP2040B() *pio.RP2040 {
-	r := pio.NewRP2040("RP2040 B (RX)")
-
+func setupB(r *pio.RP2040) {
+	var bPin uint = 5
 	pio0, _ := r.PIO(0)
 
 	mw := pio0.MemoryWriter()
@@ -219,6 +213,4 @@ func setupRP2040B() *pio.RP2040 {
 	sm0.ForceInstruction(setYInstruction) // pio_sm_exec
 
 	sm0.SetEnabled(true) // pio_sm_set_enabled
-
-	return r
 }
