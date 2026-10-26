@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"github.com/headblockhead/pio/statemachine"
+	"git.edwardh.dev/pio/statemachine"
 	"slices"
 )
 

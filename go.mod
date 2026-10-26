@@ -1,3 +1,3 @@
-module github.com/headblockhead/pio
+module git.edwardh.dev/pio
 
 go 1.27.0

@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/headblockhead/pio/gpio"
-	"github.com/headblockhead/pio/pad"
-	"github.com/headblockhead/pio/pioblock"
-	"github.com/headblockhead/pio/simulation"
+	"git.edwardh.dev/pio/gpio"
+	"git.edwardh.dev/pio/pad"
+	"git.edwardh.dev/pio/pioblock"
+	"git.edwardh.dev/pio/simulation"
 )
 
 type RP2040Observer interface {

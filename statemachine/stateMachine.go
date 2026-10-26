@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"math/bits"
 
-	"github.com/headblockhead/pio/fifo"
-	"github.com/headblockhead/pio/memory"
-	"github.com/headblockhead/pio/simulation"
+	"git.edwardh.dev/pio/fifo"
+	"git.edwardh.dev/pio/memory"
+	"git.edwardh.dev/pio/simulation"
 )
 
 type Observer interface {

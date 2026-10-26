@@ -17,7 +17,7 @@ The terminal graphics are separated into the `tui.go` file, such that they do no
 An example of the output of this program is provided below:
 
 ```console
-github:headblockhead/pio/examples/differentialManchester$ go run .
+pio/examples/differentialManchester$ go run .
          TX Program (RP2040A)                    RX Program (RP2040B)
 PC:   2                                 PC:   8       
 X:    1                                 X:    1       

@@ -4,10 +4,10 @@ import (
 	"math/rand/v2"
 	"time"
 
-	"github.com/headblockhead/pio"
-	"github.com/headblockhead/pio/gpio"
-	"github.com/headblockhead/pio/simulation"
-	"github.com/headblockhead/pio/statemachine"
+	"git.edwardh.dev/pio"
+	"git.edwardh.dev/pio/gpio"
+	"git.edwardh.dev/pio/simulation"
+	"git.edwardh.dev/pio/statemachine"
 )
 
 // programTX and programRX are exact assembled versions of the differential_manchester example from commit 7fe60d6 of the Raspberry Pi pico-examples GitHub repository.

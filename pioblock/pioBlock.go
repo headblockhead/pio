@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/headblockhead/pio/memory"
-	"github.com/headblockhead/pio/simulation"
-	"github.com/headblockhead/pio/statemachine"
+	"git.edwardh.dev/pio/memory"
+	"git.edwardh.dev/pio/simulation"
+	"git.edwardh.dev/pio/statemachine"
 )
 
 type Observer interface {

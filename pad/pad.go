@@ -1,7 +1,7 @@
 package pad
 
 import (
-	"github.com/headblockhead/pio/simulation"
+	"git.edwardh.dev/pio/simulation"
 )
 
 type Observer interface {
