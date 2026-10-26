@@ -2,7 +2,7 @@
 
 A Go package that emulates the RP2040's PIO hardware.
 
-See the [examples](examples) for usage.
+See the [examples](examples/README.md) for usage.
 
 https://github.com/user-attachments/assets/55e1b57e-c5bb-42d7-93ca-e4bb6c8f3439
 
