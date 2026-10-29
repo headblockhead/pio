@@ -6,13 +6,14 @@ import (
 
 	"git.edwardh.dev/pio"
 	"git.edwardh.dev/pio/gpio"
+	"git.edwardh.dev/pio/memory"
 	"git.edwardh.dev/pio/simulation"
 	"git.edwardh.dev/pio/statemachine"
 )
 
 // programTX and programRX are exact assembled versions of the differential_manchester example from commit 7fe60d6 of the Raspberry Pi pico-examples GitHub repository.
 
-var programTX = []uint16{
+var programTX = memory.NewProgramWithOrigin([]uint16{
 	//     .wrap_target
 	0x6021, //  0: out    x, 1
 	0x1e24, //  1: jmp    !x, 4           side 1 [6]
@@ -25,12 +26,12 @@ var programTX = []uint16{
 	0x1e05, //  8: jmp    5               side 1 [6]
 	0x0700, //  9: jmp    0                      [7]
 	//     .wrap
-}
+}, 0)
 
 const programTXWrapFrom = 9
 const programTXWrapTo = 0
 
-var programRX = []uint16{
+var programRX = memory.NewProgramWithOrigin([]uint16{
 	0x2ba0, //  0: wait   1 pin, 0               [11]
 	0x00c4, //  1: jmp    pin, 4
 	0x4021, //  2: in     x, 1
@@ -43,7 +44,7 @@ var programRX = []uint16{
 	0x0000, //  8: jmp    0
 	0x4121, //  9: in     x, 1                   [1]
 	//     .wrap
-}
+}, 0)
 
 const programRXWrapFrom = 9
 const programRXWrapTo = 5
@@ -137,7 +138,7 @@ func setupA(r *pio.RP2040) {
 	pio0, _ := r.PIO(0)
 
 	mw := pio0.MemoryWriter()
-	_ = mw.Copy(programTX, 0) // pio_add_program
+	offset, _ := mw.AddProgram(programTX) // pio_add_program
 
 	_ = pio0.SetPinOutput(aPin, false)      // pio_sm_set_pin
 	_ = pio0.SetPinOutputEnable(aPin, true) // pio_sm_set_pindirs
@@ -148,8 +149,8 @@ func setupA(r *pio.RP2040) {
 	sm0, _ := pio0.StateMachine(0)
 
 	// sm_config_set_wrap
-	_ = sm0.SetWrapFromAddress(programTXWrapFrom)
-	_ = sm0.SetWrapToAddress(programTXWrapTo)
+	_ = sm0.SetWrapFromAddress(programTXWrapFrom + offset)
+	_ = sm0.SetWrapToAddress(programTXWrapTo + offset)
 
 	// sm_config_set_sideset
 	_ = sm0.SetBitCountSideset(2)
@@ -168,6 +169,8 @@ func setupA(r *pio.RP2040) {
 
 	_ = sm0.SetClockDivisor(125.0 / (16 * 5)) // sm_config_set_clkdiv
 
+	sm0.Init(offset) // pio_sm_init
+
 	var blockingPullInstruction uint16 = 0b1000000010100000 // pio_encode_pull(false, true)
 	sm0.ForceInstruction(blockingPullInstruction)           // pio_sm_exec
 
@@ -179,7 +182,7 @@ func setupB(r *pio.RP2040) {
 	pio0, _ := r.PIO(0)
 
 	mw := pio0.MemoryWriter()
-	_ = mw.Copy(programRX, 0) // pio_add_program
+	offset, _ := mw.AddProgram(programRX) // pio_add_program
 
 	_ = pio0.SetPinOutputEnable(bPin, false) // pio_sm_set_pindirs
 
@@ -189,8 +192,8 @@ func setupB(r *pio.RP2040) {
 	sm0, _ := pio0.StateMachine(0)
 
 	// sm_config_set_wrap
-	_ = sm0.SetWrapFromAddress(programRXWrapFrom)
-	_ = sm0.SetWrapToAddress(programRXWrapTo)
+	_ = sm0.SetWrapFromAddress(programRXWrapFrom + offset)
+	_ = sm0.SetWrapToAddress(programRXWrapTo + offset)
 
 	_ = sm0.SetBaseInPin(bPin) // sm_config_set_in_pins
 	_ = sm0.SetJumpPin(bPin)   // sm_config_set_jmp_pin
@@ -203,6 +206,8 @@ func setupB(r *pio.RP2040) {
 	_ = sm0.SetFIFOJoin(statemachine.FIFOJoinRX) // sm_config_set_fifo_join
 
 	_ = sm0.SetClockDivisor(125.0 / (16 * 5)) // sm_config_set_clkdiv
+
+	sm0.Init(offset) // pio_sm_init
 
 	var setXInstruction uint16 = 0b1110000000100001 // pio_encode_set(pio_x, 1)
 	var setYInstruction uint16 = 0b1110000001000000 // pio_encode_set(pio_y, 0)

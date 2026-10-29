@@ -28,8 +28,6 @@ type RP2040Operator interface {
 }
 
 const rp2040PIOCount = 2
-const rp2040MemorySize = 32
-const rp2040StateMachineCount = 4
 const rp2040PadCount = 30
 
 type RP2040 struct {
@@ -50,7 +48,7 @@ func NewRP2040(label string) *RP2040 {
 		pads:      [rp2040PadCount]*pad.Pad{},
 	}
 	for i := range 2 {
-		r.pioBlocks[i] = pioblock.New(strconv.Itoa(int(i)), rp2040MemorySize, rp2040StateMachineCount)
+		r.pioBlocks[i] = pioblock.New(strconv.Itoa(int(i)))
 	}
 	for i := range 30 {
 		r.gpios[i] = gpio.New()

@@ -55,12 +55,12 @@ type PIOBlock struct {
 	pinOutputs       uint32
 }
 
-func New(label string, memorySize uint, numberOfStateMachines uint) *PIOBlock {
+func New(label string) *PIOBlock {
 	p := &PIOBlock{
 		id:            simulation.NewComponentIdentifier(),
 		label:         label,
-		memory:        memory.New(memorySize),
-		stateMachines: make([]*statemachine.StateMachine, numberOfStateMachines),
+		memory:        memory.New(),
+		stateMachines: make([]*statemachine.StateMachine, 4),
 
 		irqs: 0,
 
@@ -70,7 +70,7 @@ func New(label string, memorySize uint, numberOfStateMachines uint) *PIOBlock {
 		pinOutputs:       0,
 	}
 
-	for i := range numberOfStateMachines {
+	for i := range uint(4) {
 		p.stateMachines[i] = statemachine.New(i, strconv.Itoa(int(i)), p.memory.Reader())
 	}
 

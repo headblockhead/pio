@@ -89,6 +89,9 @@ type Configurator interface {
 	FIFORXReader() fifo.Reader
 	FIFOTXWriter() fifo.Writer
 
+	ClearFIFOs()
+	Init(uint)
+
 	Restart()
 	SetEnabled(bool)
 	SetSidesetIsOptional(bool)
@@ -401,6 +404,19 @@ func (sm *StateMachine) SetLabel(label string) { sm.label = label }
 
 func (sm *StateMachine) FIFORXReader() fifo.Reader { return sm.fifoRX.Reader() }
 func (sm *StateMachine) FIFOTXWriter() fifo.Writer { return sm.fifoTX.Writer() }
+
+func (sm *StateMachine) ClearFIFOs() {
+	sm.fifoRX.Clear()
+	sm.fifoTX.Clear()
+}
+
+func (sm *StateMachine) Init(programCounter uint) {
+	sm.SetEnabled(false)
+	sm.ClearFIFOs()
+	sm.Restart()
+	sm.RestartClockDivider()
+	sm.programCounter = programCounter
+}
 
 func (sm *StateMachine) Restart() {
 	sm.inputShiftRegisterCounter = 0

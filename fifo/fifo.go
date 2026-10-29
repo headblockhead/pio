@@ -27,6 +27,7 @@ type Writer interface {
 	IsFull() bool
 
 	Resize(size uint)
+	Clear()
 }
 
 type FIFO struct {
@@ -89,4 +90,11 @@ func (f *FIFO) Write(value uint32) error {
 	f.buf[f.head] = value
 	f.head = (f.head + 1) % f.Size()
 	return nil
+}
+
+func (f *FIFO) Clear() {
+	f.buf = make([]uint32, f.Size())
+	f.head = 0
+	f.tail = 0
+	f.level = 0
 }
