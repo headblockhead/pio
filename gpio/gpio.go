@@ -9,10 +9,10 @@ const (
 )
 
 type Observer interface {
-	GetOutputEnableOverride() Override
-	GetOutputOverride() Override
-	GetInputOverride() Override
-	GetFunction() Function
+	OutputEnableOverride() Override
+	OutputOverride() Override
+	InputOverride() Override
+	Function() Function
 }
 
 type Configurator interface {
@@ -46,10 +46,10 @@ func (g *GPIO) Observer() Observer {
 	return g
 }
 
-func (g *GPIO) GetOutputEnableOverride() Override { return g.outputEnableOverride }
-func (g *GPIO) GetOutputOverride() Override       { return g.outputOverride }
-func (g *GPIO) GetInputOverride() Override        { return g.inputOverride }
-func (g *GPIO) GetFunction() Function             { return g.function }
+func (g *GPIO) OutputEnableOverride() Override { return g.outputEnableOverride }
+func (g *GPIO) OutputOverride() Override       { return g.outputOverride }
+func (g *GPIO) InputOverride() Override        { return g.inputOverride }
+func (g *GPIO) Function() Function             { return g.function }
 
 func (g *GPIO) Configurator() Configurator {
 	return g

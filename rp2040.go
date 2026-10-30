@@ -127,13 +127,18 @@ func (r *RP2040) Tick() error {
 
 	for i, p := range r.pads {
 		padOperator := p.Operator()
+		gpioOperator := r.gpios[i].Operator()
 
 		inputHigh := padOperator.GetInput()
-		if inputHigh {
+		overridenInput, err := gpioOperator.InputOverride().ApplyTo(inputHigh)
+		if err != nil {
+			return fmt.Errorf("gpio %d input: %w", i, err)
+		}
+		if overridenInput {
 			pinInputs |= (0b1 << i)
 		}
 
-		err := padOperator.Tick()
+		err = padOperator.Tick()
 		if err != nil {
 			return fmt.Errorf("pad [%v]: %w", padOperator.Label(), err)
 		}
@@ -160,20 +165,36 @@ func (r *RP2040) Tick() error {
 	for i, p := range r.pads {
 		padOperator := p.Operator()
 		gpioOperator := r.gpios[i].Operator()
-		f := gpioOperator.GetFunction()
+		f := gpioOperator.Function()
+
+		var pinOutputHigh bool
+		var pinOutputEnabled bool
+
 		switch f {
 		case gpio.FunctionNone:
-			padOperator.SetOutput(false)
-			padOperator.SetOutputEnabled(false)
+			pinOutputHigh = false
+			pinOutputEnabled = false
 		case gpio.FunctionPIO0:
-			padOperator.SetOutput((pio0PinOutputs>>i)&0b1 == 1)
-			padOperator.SetOutputEnabled((pio0PinOutputEnables>>i)&0b1 == 1)
+			pinOutputHigh = (pio0PinOutputs>>i)&0b1 == 1
+			pinOutputEnabled = (pio0PinOutputEnables>>i)&0b1 == 1
 		case gpio.FunctionPIO1:
-			padOperator.SetOutput((pio1PinOutputs>>i)&0b1 == 1)
-			padOperator.SetOutputEnabled((pio1PinOutputEnables>>i)&0b1 == 1)
+			pinOutputHigh = (pio1PinOutputs>>i)&0b1 == 1
+			pinOutputEnabled = (pio1PinOutputEnables>>i)&0b1 == 1
 		default:
 			return fmt.Errorf("%w: %d", ErrGPIOFunctionInvalid, f)
 		}
+
+		overridenOutput, err := gpioOperator.OutputOverride().ApplyTo(pinOutputHigh)
+		if err != nil {
+			return fmt.Errorf("gpio %d output: %w", i, err)
+		}
+		padOperator.SetOutput(overridenOutput)
+
+		overridenOutputEnabled, err := gpioOperator.OutputEnableOverride().ApplyTo(pinOutputEnabled)
+		if err != nil {
+			return fmt.Errorf("gpio %d output enable: %w", i, err)
+		}
+		padOperator.SetOutputEnabled(overridenOutputEnabled)
 	}
 
 	return nil
