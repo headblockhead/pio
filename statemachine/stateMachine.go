@@ -94,7 +94,7 @@ type Configurator interface {
 
 	Restart()
 	SetEnabled(bool)
-	SetSidesetIsOptional(bool)
+	SetSidesetIsOptional(bool) error
 	SetSidesetControlsPinDirection(bool)
 	SetOutWriteEnableUsed(bool)
 	SetOutWriteEnableBitIndex(uint) error
@@ -129,6 +129,11 @@ type Configurator interface {
 	SetClockDivisor(float32) error
 	SetClockDivisorInteger(uint) error
 	SetClockDivisorFractional(uint8)
+
+	SetOutShift(bool, bool, uint) error
+	SetInShift(bool, bool, uint) error
+	SetSideset(uint, bool, bool) error
+	SetWrap(uint, uint) error
 }
 
 type Operator interface {
@@ -437,8 +442,12 @@ func (sm *StateMachine) Restart() {
 func (sm *StateMachine) SetEnabled(enabled bool) {
 	sm.enabled = enabled
 }
-func (sm *StateMachine) SetSidesetIsOptional(sidesetIsOptional bool) {
+func (sm *StateMachine) SetSidesetIsOptional(sidesetIsOptional bool) error {
+	if sm.bitCountSideset == 0 && sidesetIsOptional {
+		return fmt.Errorf("%w: sideset should not be optional when bit count is 0", ErrValueOutOfRange)
+	}
 	sm.sidesetIsOptional = sidesetIsOptional
+	return nil
 }
 func (sm *StateMachine) SetSidesetControlsPinDirection(sidesetControlsPinDirection bool) {
 	sm.sidesetControlsPinDirection = sidesetControlsPinDirection
@@ -519,6 +528,9 @@ func (sm *StateMachine) SetBaseSidesetPin(baseSidesetPin uint) error {
 func (sm *StateMachine) SetBitCountSideset(bitCountSideset uint) error {
 	if bitCountSideset > 5 {
 		return fmt.Errorf("%w: %d, should be < 6", ErrValueOutOfRange, bitCountSideset)
+	}
+	if sm.sidesetIsOptional && bitCountSideset == 0 {
+		return fmt.Errorf("%w: %d, should be > 0 when sideset is optional", ErrValueOutOfRange, bitCountSideset)
 	}
 	sm.bitCountSideset = bitCountSideset
 	return nil
@@ -628,6 +640,51 @@ func (sm *StateMachine) SetClockDivisorInteger(divInt uint) error {
 }
 func (sm *StateMachine) SetClockDivisorFractional(divFrac uint8) {
 	sm.clockDivisorFractional = divFrac
+}
+
+func (sm *StateMachine) SetOutShift(movesRight bool, autopullEnabled bool, pullThreshold uint) error {
+	sm.SetOutShiftMovesRight(movesRight)
+	sm.SetAutopullEnabled(autopullEnabled)
+	err := sm.SetPullThreshold(pullThreshold)
+	if err != nil {
+		return fmt.Errorf("error setting pull threshold: %w", err)
+	}
+	return nil
+}
+
+func (sm *StateMachine) SetInShift(movesRight bool, autopushEnabled bool, pushThreshold uint) error {
+	sm.SetInShiftMovesRight(movesRight)
+	sm.SetAutopushEnabled(autopushEnabled)
+	err := sm.SetPushThreshold(pushThreshold)
+	if err != nil {
+		return fmt.Errorf("error setting push threshold: %w", err)
+	}
+	return nil
+}
+
+func (sm *StateMachine) SetSideset(bitCountSideset uint, sidesetIsOptional bool, sidesetControlsPinDirection bool) error {
+	if bitCountSideset > 5 {
+		return fmt.Errorf("bit count sideset %w: %d, should be < 6", ErrValueOutOfRange, bitCountSideset)
+	}
+	if sidesetIsOptional && bitCountSideset == 0 {
+		return fmt.Errorf("bit count sideset %w: %d, should be > 0 when sideset is optional", ErrValueOutOfRange, bitCountSideset)
+	}
+	sm.bitCountSideset = bitCountSideset
+	sm.sidesetIsOptional = sidesetIsOptional
+	sm.SetSidesetControlsPinDirection(sidesetControlsPinDirection)
+	return nil
+}
+
+func (sm *StateMachine) SetWrap(wrapToAddress uint, wrapFromAddress uint) error {
+	err := sm.SetWrapToAddress(wrapToAddress)
+	if err != nil {
+		return fmt.Errorf("error setting wrap to address: %w", err)
+	}
+	err = sm.SetWrapFromAddress(wrapFromAddress)
+	if err != nil {
+		return fmt.Errorf("error setting wrap from address: %w", err)
+	}
+	return nil
 }
 
 func (sm *StateMachine) Operator() Operator {

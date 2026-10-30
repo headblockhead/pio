@@ -105,13 +105,13 @@ func main() {
 	bRXReader := bSM0.FIFORXReader()
 
 	// The simulation will be run forever until it is manually stopped.
-	for true {
+	for {
 		// Draw the state to the terminal. (see tui.go)
 		programStateDraw(programStateRender(aSM0, bSM0, signalNet.LogicLevel()))
 
 		// If RP2040 A's TX FIFO is not full, it will be given another word to transmit.
 		if !aTXWriter.IsFull() {
-			aTXWriter.Write(rand.Uint32())
+			_ = aTXWriter.Write(rand.Uint32())
 		}
 
 		// Tick the whole simulation forward one cycle.
@@ -148,26 +148,12 @@ func setupA(r *pio.RP2040) {
 
 	sm0, _ := pio0.StateMachine(0)
 
-	// sm_config_set_wrap
-	_ = sm0.SetWrapFromAddress(programTXWrapFrom + offset)
-	_ = sm0.SetWrapToAddress(programTXWrapTo + offset)
-
-	// sm_config_set_sideset
-	_ = sm0.SetBitCountSideset(2)
-	sm0.SetSidesetIsOptional(true)
-	sm0.SetSidesetControlsPinDirection(false)
-
-	// sm_config_set_sideset_pins
-	_ = sm0.SetBaseSidesetPin(aPin)
-
-	// sm_config_set_out_shift
-	sm0.SetOutShiftMovesRight(true)
-	sm0.SetAutopullEnabled(true)
-	_ = sm0.SetPullThreshold(32)
-
-	_ = sm0.SetFIFOJoin(statemachine.FIFOJoinTX) // sm_config_set_fifo_join
-
-	_ = sm0.SetClockDivisor(125.0 / (16 * 5)) // sm_config_set_clkdiv
+	_ = sm0.SetWrap(programTXWrapTo+offset, programTXWrapFrom+offset) // sm_config_set_wrap
+	_ = sm0.SetSideset(2, true, false)                                // sm_config_set_sideset
+	_ = sm0.SetBaseSidesetPin(aPin)                                   // sm_config_set_sideset_pins
+	_ = sm0.SetOutShift(true, true, 32)                               // sm_config_set_out_shift
+	_ = sm0.SetFIFOJoin(statemachine.FIFOJoinTX)                      // sm_config_set_fifo_join
+	_ = sm0.SetClockDivisor(125.0 / (16 * 5))                         // sm_config_set_clkdiv
 
 	sm0.Init(offset) // pio_sm_init
 
@@ -191,21 +177,12 @@ func setupB(r *pio.RP2040) {
 
 	sm0, _ := pio0.StateMachine(0)
 
-	// sm_config_set_wrap
-	_ = sm0.SetWrapFromAddress(programRXWrapFrom + offset)
-	_ = sm0.SetWrapToAddress(programRXWrapTo + offset)
-
-	_ = sm0.SetBaseInPin(bPin) // sm_config_set_in_pins
-	_ = sm0.SetJumpPin(bPin)   // sm_config_set_jmp_pin
-
-	// sm_config_set_in_shift
-	sm0.SetInShiftMovesRight(true)
-	sm0.SetAutopushEnabled(true)
-	_ = sm0.SetPushThreshold(32)
-
-	_ = sm0.SetFIFOJoin(statemachine.FIFOJoinRX) // sm_config_set_fifo_join
-
-	_ = sm0.SetClockDivisor(125.0 / (16 * 5)) // sm_config_set_clkdiv
+	_ = sm0.SetWrap(programRXWrapTo+offset, programRXWrapFrom+offset) // sm_config_set_wrap
+	_ = sm0.SetBaseInPin(bPin)                                        // sm_config_set_in_pins
+	_ = sm0.SetJumpPin(bPin)                                          // sm_config_set_jmp_pin
+	_ = sm0.SetInShift(true, true, 32)                                // sm_config_set_in_shift
+	_ = sm0.SetFIFOJoin(statemachine.FIFOJoinRX)                      // sm_config_set_fifo_join
+	_ = sm0.SetClockDivisor(125.0 / (16 * 5))                         // sm_config_set_clkdiv
 
 	sm0.Init(offset) // pio_sm_init
 

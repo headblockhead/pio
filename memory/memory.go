@@ -135,9 +135,9 @@ func (m *Memory) AddProgramAtOffset(program *Program, offset uint) error {
 		instructionType := (instr >> 13) & 0b111
 		// update jump instructions to point to the correct offset
 		if instructionType == 0b000 {
-			var originalAddress uint16 = instr & 0b11111
-			var offsetAddress uint16 = originalAddress + uint16(offset)
-			var newInstruction uint16 = (instr & 0b1111111111100000) | (offsetAddress & 0b11111)
+			var originalAddress = instr & 0b11111
+			var offsetAddress = originalAddress + uint16(offset)
+			var newInstruction = (instr & 0b1111111111100000) | (offsetAddress & 0b11111)
 			updatedInstructions[i] = newInstruction
 		}
 	}
