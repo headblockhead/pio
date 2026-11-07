@@ -140,7 +140,7 @@ func setupA(r *pio.RP2040) {
 	mw := pio0.MemoryWriter()
 	offset, _ := mw.AddProgram(programTX) // pio_add_program
 
-	_ = pio0.SetPinOutput(aPin, false)      // pio_sm_set_pin
+	_ = pio0.SetPinOutput(aPin, false)      // pio_sm_set_pins
 	_ = pio0.SetPinOutputEnable(aPin, true) // pio_sm_set_pindirs
 
 	txGPIO, _ := r.GPIO(aPin)

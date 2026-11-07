@@ -1,6 +1,10 @@
 package pad
 
 import (
+	"errors"
+	"fmt"
+	"slices"
+
 	"git.edwardh.dev/pio/simulation"
 )
 
@@ -26,8 +30,8 @@ type Configurator interface {
 	SetPullDown(bool)
 	SetOutputDisabled(bool)
 	SetInputEnabled(bool)
-	SetOutputDelayCycles(uint)
-	SetInputDelayCycles(uint)
+	SetOutputDelayCycles(uint) error
+	SetInputDelayCycles(uint) error
 }
 
 type Operator interface {
@@ -123,21 +127,35 @@ func (p *Pad) SetPullUp(pullUp bool)                 { p.pullUp = pullUp }
 func (p *Pad) SetPullDown(pullDown bool)             { p.pullDown = pullDown }
 func (p *Pad) SetOutputDisabled(outputDisabled bool) { p.outputDisabled = outputDisabled }
 func (p *Pad) SetInputEnabled(inputEnabled bool)     { p.inputEnabled = inputEnabled }
-func (p *Pad) SetOutputDelayCycles(c uint) {
-	prev := len(p.stateHistory)
-	p.stateHistory = p.stateHistory[:c+1]
-	// fill in any new space
-	for i := prev; i < int(c+1); i++ {
-		p.stateHistory[i] = p.stateHistory[prev-1]
+
+var ErrInvalidDelayCycles = errors.New("invalid delay cycles")
+
+func updateHistoryLength[S ~[]E, E any](history S, cycles uint) (S, error) {
+	if cycles == 0 {
+		return history, fmt.Errorf("%w: %d, should be > 0", ErrInvalidDelayCycles, cycles)
 	}
+	currentLength := len(history)
+	if int(cycles) > currentLength {
+		newestValue := history[0]
+		numberOfNewValues := int(cycles) - currentLength
+		stretchedValues := slices.Repeat([]E{newestValue}, numberOfNewValues)
+		history = append(stretchedValues, history...)
+	} else if int(cycles) < len(history) {
+		history = history[:cycles]
+	}
+	return history, nil
 }
-func (p *Pad) SetInputDelayCycles(c uint) {
-	prev := len(p.inputHistory)
-	p.inputHistory = p.inputHistory[:c+1]
-	// fill in any new space
-	for i := prev; i < int(c+1); i++ {
-		p.inputHistory[i] = p.inputHistory[prev-1]
-	}
+
+func (p *Pad) SetOutputDelayCycles(c uint) error {
+	var err error
+	p.stateHistory, err = updateHistoryLength(p.stateHistory, c)
+	return err
+}
+
+func (p *Pad) SetInputDelayCycles(c uint) error {
+	var err error
+	p.inputHistory, err = updateHistoryLength(p.inputHistory, c)
+	return err
 }
 
 func (p *Pad) Operator() Operator {
@@ -149,12 +167,12 @@ func (p *Pad) SetOutput(output bool)               { p.output = output }
 func (p *Pad) GetInput() bool                      { return p.inputHistory[len(p.inputHistory)-1] }
 
 func (p *Pad) Tick() error {
-	for i := 1; i < len(p.stateHistory); i++ {
+	for i := len(p.stateHistory) - 1; i > 0; i-- {
 		p.stateHistory[i] = p.stateHistory[i-1]
 	}
 	p.stateHistory[0] = padState(p.outputEnabled && !p.outputDisabled, p.output, p.pullUp, p.pullDown)
 
-	for i := 1; i < len(p.inputHistory); i++ {
+	for i := len(p.inputHistory) - 1; i > 0; i-- {
 		p.inputHistory[i] = p.inputHistory[i-1]
 	}
 	// p.inputHistory[0] is updated by SetInput.

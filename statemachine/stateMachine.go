@@ -90,7 +90,7 @@ type Configurator interface {
 	FIFOTXWriter() fifo.Writer
 
 	ClearFIFOs()
-	Init(uint)
+	Init(uint) error
 
 	Restart()
 	SetEnabled(bool)
@@ -415,12 +415,16 @@ func (sm *StateMachine) ClearFIFOs() {
 	sm.fifoTX.Clear()
 }
 
-func (sm *StateMachine) Init(programCounter uint) {
+func (sm *StateMachine) Init(programCounter uint) error {
+	if programCounter > 31 {
+		return fmt.Errorf("%w: %d, should be < 32", ErrValueOutOfRange, programCounter)
+	}
 	sm.SetEnabled(false)
 	sm.ClearFIFOs()
 	sm.Restart()
 	sm.RestartClockDivider()
 	sm.programCounter = programCounter
+	return nil
 }
 
 func (sm *StateMachine) Restart() {
