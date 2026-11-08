@@ -56,7 +56,6 @@ type Observer interface {
 
 	ProgramCounter() uint
 	Stalled() bool
-	StalledIRQ() bool
 	Jumped() bool
 	DelaysRemaining() uint
 	NewForcedInstruction() bool
@@ -206,7 +205,6 @@ type StateMachine struct {
 
 	programCounter           uint
 	stalled                  bool
-	stalledIRQ               bool
 	jumped                   bool
 	delaysRemaining          uint
 	newForcedInstruction     bool
@@ -286,7 +284,6 @@ func New(index uint, label string, memoryReader memory.Reader) *StateMachine {
 
 		programCounter:           0,
 		stalled:                  false,
-		stalledIRQ:               false,
 		jumped:                   false,
 		delaysRemaining:          0,
 		newForcedInstruction:     false,
@@ -366,7 +363,6 @@ func (sm *StateMachine) JumpPin() uint         { return sm.jumpPin }
 
 func (sm *StateMachine) ProgramCounter() uint           { return sm.programCounter }
 func (sm *StateMachine) Stalled() bool                  { return sm.stalled }
-func (sm *StateMachine) StalledIRQ() bool               { return sm.stalledIRQ }
 func (sm *StateMachine) Jumped() bool                   { return sm.jumped }
 func (sm *StateMachine) DelaysRemaining() uint          { return sm.delaysRemaining }
 func (sm *StateMachine) NewForcedInstruction() bool     { return sm.newForcedInstruction }
@@ -432,7 +428,7 @@ func (sm *StateMachine) Restart() {
 	sm.outputShiftRegisterCounter = 32
 	sm.inputShiftRegister = 0
 	sm.delaysRemaining = 0
-	sm.stalledIRQ = false
+	sm.stalled = false
 	sm.newForcedInstruction = false
 	sm.forcedInstructionStalled = false
 	sm.newEXECdInstruction = false
@@ -723,13 +719,13 @@ func (sm *StateMachine) Tick() error {
 	sm.irqWritesMask = 0
 
 	if sm.newForcedInstruction {
-		jumped, stalled, stalledIRQ, err := sm.execute(sm.forcedInstruction, false)
+		jumped, stalled, err := sm.execute(sm.forcedInstruction, false)
 		if err != nil {
 			return fmt.Errorf("error executing forced instruction %016b: %w", sm.forcedInstruction, err)
 		}
 		sm.newForcedInstruction = false
 		sm.jumped = jumped
-		sm.forcedInstructionStalled = stalled || stalledIRQ
+		sm.forcedInstructionStalled = stalled
 		if sm.forcedInstructionStalled {
 			if sm.newEXECdInstruction || sm.execdInstructionStalled {
 				return ErrForcedInstructionStalledDuringEXECdInstruction
@@ -737,12 +733,12 @@ func (sm *StateMachine) Tick() error {
 			sm.latchedInstruction = sm.forcedInstruction
 		}
 	} else if sm.forcedInstructionStalled {
-		jumped, stalled, stalledIRQ, err := sm.execute(sm.latchedInstruction, true)
+		jumped, stalled, err := sm.execute(sm.latchedInstruction, true)
 		if err != nil {
 			return fmt.Errorf("error executing stalled forced instruction %016b: %w", sm.latchedInstruction, err)
 		}
 		sm.jumped = jumped
-		sm.forcedInstructionStalled = stalled || stalledIRQ
+		sm.forcedInstructionStalled = stalled
 	} else if sm.clockDividerTicksRemaining == 0 && sm.enabled {
 		err := sm.dividedTick()
 		if err != nil {
@@ -761,35 +757,34 @@ func (sm *StateMachine) Tick() error {
 
 func (sm *StateMachine) dividedTick() error {
 	if sm.newEXECdInstruction {
-		jumped, stalled, stalledIRQ, err := sm.execute(sm.latchedInstruction, false)
+		jumped, stalled, err := sm.execute(sm.latchedInstruction, false)
 		if err != nil {
 			return fmt.Errorf("error executing EXEC'd instruction %016b: %w", sm.latchedInstruction, err)
 		}
 		sm.newEXECdInstruction = false
 		sm.jumped = jumped
-		sm.execdInstructionStalled = stalled || stalledIRQ
+		sm.execdInstructionStalled = stalled
 	} else if sm.execdInstructionStalled {
-		jumped, stalled, stalledIRQ, err := sm.execute(sm.latchedInstruction, true)
+		jumped, stalled, err := sm.execute(sm.latchedInstruction, true)
 		if err != nil {
 			return fmt.Errorf("error executing stalled EXEC'd instruction %016b: %w", sm.latchedInstruction, err)
 		}
 		sm.jumped = jumped
-		sm.execdInstructionStalled = stalled || stalledIRQ
-	} else if sm.stalled || sm.stalledIRQ {
+		sm.execdInstructionStalled = stalled
+	} else if sm.stalled {
 		instr, err := sm.memoryReader.Read(sm.programCounter)
 		if err != nil {
 			return fmt.Errorf("error reading instruction memory: %w", err)
 		}
-		jumped, stalled, stalledIRQ, err := sm.execute(instr, true)
+		jumped, stalled, err := sm.execute(instr, true)
 		if err != nil {
 			return fmt.Errorf("error executing stalled instruction %016b: %w", instr, err)
 		}
-		if !jumped && !stalled && !stalledIRQ {
+		if !jumped && !stalled {
 			sm.incrementProgramCounter()
 		}
 		sm.jumped = jumped
 		sm.stalled = stalled
-		sm.stalledIRQ = stalledIRQ
 	} else if sm.delaysRemaining > 0 {
 		sm.delaysRemaining--
 	} else {
@@ -797,16 +792,15 @@ func (sm *StateMachine) dividedTick() error {
 		if err != nil {
 			return fmt.Errorf("error reading instruction memory: %w", err)
 		}
-		jumped, stalled, stalledIRQ, err := sm.execute(instr, false)
+		jumped, stalled, err := sm.execute(instr, false)
 		if err != nil {
 			return fmt.Errorf("error executing instruction %016b at address %d: %w", instr, sm.programCounter, err)
 		}
-		if !jumped && !stalled && !stalledIRQ {
+		if !jumped && !stalled {
 			sm.incrementProgramCounter()
 		}
 		sm.jumped = jumped
 		sm.stalled = stalled
-		sm.stalledIRQ = stalledIRQ
 	}
 	return nil
 }
@@ -826,7 +820,7 @@ const (
 
 var ErrInstructionTypeInvalid = errors.New("instruction type invalid")
 
-func (sm *StateMachine) execute(instr uint16, currentlyStalled bool) (jumped bool, stalled bool, stalledIRQ bool, err error) {
+func (sm *StateMachine) execute(instr uint16, currentlyStalled bool) (jumped bool, stalled bool, err error) {
 	instructionType := instruction((instr >> 13) & 0b111)
 
 	switch instructionType {
@@ -835,7 +829,7 @@ func (sm *StateMachine) execute(instr uint16, currentlyStalled bool) (jumped boo
 		address := uint(instr & 0b11111)
 		jumped, err = sm.executeJump(condition, address)
 		if err != nil {
-			return false, false, false, fmt.Errorf("jump: %w", err)
+			return false, false, fmt.Errorf("jump: %w", err)
 		}
 	case instructionWait:
 		polarity := (instr>>7)&0b1 == 1
@@ -843,7 +837,7 @@ func (sm *StateMachine) execute(instr uint16, currentlyStalled bool) (jumped boo
 		index := uint(instr & 0b11111)
 		stalled, err = sm.executeWait(polarity, source, index)
 		if err != nil {
-			return false, false, false, fmt.Errorf("wait: %w", err)
+			return false, false, fmt.Errorf("wait: %w", err)
 		}
 	case instructionIn:
 		source := inSource((instr >> 5) & 0b111)
@@ -853,7 +847,7 @@ func (sm *StateMachine) execute(instr uint16, currentlyStalled bool) (jumped boo
 		}
 		stalled, err = sm.executeIn(source, numberOfBits, currentlyStalled)
 		if err != nil {
-			return false, false, false, fmt.Errorf("in: %w", err)
+			return false, false, fmt.Errorf("in: %w", err)
 		}
 	case instructionOut:
 		destination := outDestination((instr >> 5) & 0b111)
@@ -863,7 +857,7 @@ func (sm *StateMachine) execute(instr uint16, currentlyStalled bool) (jumped boo
 		}
 		jumped, stalled, err = sm.executeOut(destination, numberOfBits)
 		if err != nil {
-			return false, false, false, fmt.Errorf("out: %w", err)
+			return false, false, fmt.Errorf("out: %w", err)
 		}
 	case instructionPushPull:
 		isPull := (instr>>7)&0b1 == 1
@@ -871,7 +865,7 @@ func (sm *StateMachine) execute(instr uint16, currentlyStalled bool) (jumped boo
 		block := (instr>>5)&0b1 == 1
 		stalled, err = sm.executePushOrPull(isPull, ifThreshold, block)
 		if err != nil {
-			return false, false, false, fmt.Errorf("push/pull: %w", err)
+			return false, false, fmt.Errorf("push/pull: %w", err)
 		}
 	case instructionMove:
 		destination := moveDestination((instr >> 5) & 0b111)
@@ -879,31 +873,31 @@ func (sm *StateMachine) execute(instr uint16, currentlyStalled bool) (jumped boo
 		source := moveSource(instr & 0b111)
 		jumped, err = sm.executeMove(destination, operation, source)
 		if err != nil {
-			return false, false, false, fmt.Errorf("move: %w", err)
+			return false, false, fmt.Errorf("move: %w", err)
 		}
 	case instructionIRQ:
 		clearIRQ := (instr>>6)&0b1 == 1
 		waitIRQ := (instr>>5)&0b1 == 1
 		index := uint(instr & 0b11111)
-		stalledIRQ, err = sm.executeIRQ(clearIRQ, waitIRQ, index, currentlyStalled)
+		stalled, err = sm.executeIRQ(clearIRQ, waitIRQ, index, currentlyStalled)
 		if err != nil {
-			return false, false, false, fmt.Errorf("irq: %w", err)
+			return false, false, fmt.Errorf("irq: %w", err)
 		}
 	case instructionSet:
 		destination := setDestination((instr >> 5) & 0b111)
 		data := uint(instr & 0b11111)
 		err := sm.executeSet(destination, data)
 		if err != nil {
-			return false, false, false, fmt.Errorf("set: %w", err)
+			return false, false, fmt.Errorf("set: %w", err)
 		}
 	default:
-		return false, false, false, ErrInstructionTypeInvalid
+		return false, false, ErrInstructionTypeInvalid
 	}
 
 	if sm.autopullEnabled && sm.outputShiftRegisterCounter >= sm.pullThreshold && !sm.fifoTX.IsEmpty() {
 		osr, err := sm.fifoTX.Read()
 		if err != nil {
-			return false, false, false, fmt.Errorf("error reading TX FIFO for autopull: %w", err)
+			return false, false, fmt.Errorf("error reading TX FIFO for autopull: %w", err)
 		}
 		sm.outputShiftRegister = osr
 		sm.outputShiftRegisterCounter = 0
@@ -938,7 +932,7 @@ func (sm *StateMachine) execute(instr uint16, currentlyStalled bool) (jumped boo
 		sm.delaysRemaining = 0
 	}
 
-	return jumped, stalled, stalledIRQ, nil
+	return jumped, stalled, nil
 }
 
 func (sm *StateMachine) incrementProgramCounter() {
