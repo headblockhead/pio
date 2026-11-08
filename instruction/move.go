@@ -1,6 +1,6 @@
-package asm
+package instruction
 
-const InstructionTypeMove InstructionType = 0b101
+const InstructionTypeMove Type = 0b101
 
 type MoveDestination uint8
 type MoveOperation uint8

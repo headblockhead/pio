@@ -1,6 +1,6 @@
-package asm
+package instruction
 
-const InstructionTypePushPull InstructionType = 0b100
+const InstructionTypePushPull Type = 0b100
 
 type PushPull struct {
 	isPull      bool

@@ -1,6 +1,6 @@
-package asm
+package instruction
 
-const InstructionTypeWait InstructionType = 0b001
+const InstructionTypeWait Type = 0b001
 
 type WaitSource uint8
 

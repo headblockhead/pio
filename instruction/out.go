@@ -1,6 +1,6 @@
-package asm
+package instruction
 
-const InstructionTypeOut InstructionType = 0b011
+const InstructionTypeOut Type = 0b011
 
 type OutDestination uint8
 

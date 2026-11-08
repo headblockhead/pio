@@ -805,18 +805,6 @@ func (sm *StateMachine) dividedTick() error {
 	return nil
 }
 
-type instruction uint
-
-const (
-	instructionWait     instruction = 0b001
-	instructionIn       instruction = 0b010
-	instructionOut      instruction = 0b011
-	instructionPushPull instruction = 0b100
-	instructionMove     instruction = 0b101
-	instructionIRQ      instruction = 0b110
-	instructionSet      instruction = 0b111
-)
-
 var ErrInstructionTypeInvalid = errors.New("instruction type invalid")
 
 func (sm *StateMachine) execute(instr uint16, currentlyStalled bool) (jumped bool, stalled bool, err error) {

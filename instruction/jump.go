@@ -1,6 +1,6 @@
-package asm
+package instruction
 
-const InstructionTypeJump InstructionType = 0b000
+const InstructionTypeJump Type = 0b000
 
 type JumpCondition uint8
 

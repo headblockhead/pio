@@ -1,6 +1,6 @@
-package asm
+package instruction
 
-const InstructionTypeIn InstructionType = 0b010
+const InstructionTypeIn Type = 0b010
 
 type InSource uint8
 

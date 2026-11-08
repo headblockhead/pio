@@ -1,6 +1,6 @@
-package asm
+package instruction
 
-const InstructionTypeSet InstructionType = 0b111
+const InstructionTypeSet Type = 0b111
 
 type SetDestination uint8
 

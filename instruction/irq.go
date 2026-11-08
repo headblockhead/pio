@@ -1,6 +1,6 @@
-package asm
+package instruction
 
-const InstructionTypeIRQ InstructionType = 0b110
+const InstructionTypeIRQ Type = 0b110
 
 type IRQ struct {
 	clear bool

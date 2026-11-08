@@ -3,6 +3,7 @@ package fifo
 import (
 	"errors"
 	"fmt"
+	"slices"
 )
 
 type Observer interface {
@@ -17,16 +18,12 @@ type Reader interface {
 	Observer() Observer
 	Read() (uint32, error)
 	IsEmpty() bool
-
-	Resize(size uint)
 }
 
 type Writer interface {
 	Observer() Observer
 	Write(uint32) error
 	IsFull() bool
-
-	Resize(size uint)
 	Clear()
 }
 
@@ -63,7 +60,7 @@ func (f *FIFO) Reader() Reader     { return f }
 func (f *FIFO) Writer() Writer     { return f }
 func (f *FIFO) Size() uint         { return (uint)(len(f.buf)) }
 func (f *FIFO) Level() uint        { return f.level }
-func (f *FIFO) Buffer() []uint32   { return f.buf }
+func (f *FIFO) Buffer() []uint32   { return slices.Clone(f.buf) }
 func (f *FIFO) IsEmpty() bool      { return f.Level() == 0 }
 
 var ErrEmpty = errors.New("empty")
