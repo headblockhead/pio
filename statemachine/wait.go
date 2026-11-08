@@ -7,36 +7,44 @@ import (
 )
 
 type WaitInput struct {
+	SMIndex   uint8
+	PinInputs uint32
+	BaseInPin uint8
+	IRQInputs uint8
 }
 
 type WaitOutput struct {
+	ShouldStall    bool
+	ShouldClearIRQ bool
+	ClearIRQIndex  uint8
 }
 
 var ErrWaitSourceInvalid = errors.New("wait source invalid")
 
-func ExecuteWait(instr instruction.Wait, input WaitInput, output WaitOutput) error {
+func ExecuteWait(instr instruction.Wait, input WaitInput) (WaitOutput, error) {
+	var output WaitOutput
+
 	switch instr.Source() {
 	case instruction.WaitSourceGPIO:
-		stalled = ((sm.pinInputs>>index)&0b1 == 1) != polarity
+		output.ShouldStall = ((input.PinInputs>>instr.Index())&0b1 == 1) != instr.Polarity()
 	case instruction.WaitSourcePin:
-		pin := (sm.baseInPin + index) % 32
-		stalled = ((sm.pinInputs>>pin)&0b1 == 1) != polarity
+		pin := (input.BaseInPin + instr.Index()) % 32
+		output.ShouldStall = ((input.PinInputs>>pin)&0b1 == 1) != instr.Polarity()
 	case instruction.WaitSourceIRQ:
-		relative := (index>>4)&0b1 == 1
-		irq := index & 0b111
+		relative := (instr.Index()>>4)&0b1 == 1
+		irq := instr.Index() & 0b111
 		if relative {
 			upperBit := irq & 0b100
-			lowerBits := (irq + sm.index) & 0b011
+			lowerBits := (irq + input.SMIndex) & 0b011
 			irq = upperBit | lowerBits
 		}
-		stalled = ((sm.irqInputs>>irq)&0b1 == 1) != polarity
-		if !stalled && polarity {
-			var clearIRQMask uint8 = (0b1 << irq)
-			sm.irqWrites &= ^clearIRQMask
-			sm.irqWritesMask |= clearIRQMask
+		output.ShouldStall = ((input.IRQInputs>>irq)&0b1 == 1) != instr.Polarity()
+		if !output.ShouldStall && instr.Polarity() {
+			output.ShouldClearIRQ = true
+			output.ClearIRQIndex = irq
 		}
 	default:
-		return false, ErrWaitSourceInvalid
+		return output, ErrWaitSourceInvalid
 	}
-	return stalled, nil
+	return output, nil
 }

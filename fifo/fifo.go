@@ -18,12 +18,14 @@ type Reader interface {
 	Observer() Observer
 	Read() (uint32, error)
 	IsEmpty() bool
+	Level() uint
 }
 
 type Writer interface {
 	Observer() Observer
 	Write(uint32) error
 	IsFull() bool
+	Level() uint
 	Clear()
 }
 

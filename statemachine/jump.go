@@ -18,7 +18,8 @@ type JumpInput struct {
 type JumpOutput struct {
 	DecrementXRegister bool
 	DecrementYRegister bool
-	NewPC              *uint8
+	Jumped             bool
+	NewProgramCounter  uint8
 }
 
 var ErrJumpConditionInvalid = errors.New("jump condition invalid")
@@ -71,7 +72,8 @@ func ExecuteJump(instr instruction.Jump, input JumpInput) (JumpOutput, error) {
 	}
 
 	if shouldJump {
-		output.NewPC = &address
+		output.Jumped = true
+		output.NewProgramCounter = address
 	}
 
 	return output, nil
