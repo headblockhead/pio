@@ -101,9 +101,13 @@ func (m *Memory) Clear() {
 	m.programUsageMask = 0
 }
 
+var ErrProgramEmpty = errors.New("program is empty")
 var ErrProgramCannotFit = errors.New("program cannot fit")
 
 func (m *Memory) AddProgram(program *Program) (offset uint, err error) {
+	if len(program.Instructions()) < 1 {
+		return 0, ErrProgramEmpty
+	}
 	if len(program.Instructions()) > int(m.Size()) {
 		return 0, fmt.Errorf("program length %d: %w", len(program.Instructions()), ErrExceedsMemorySize)
 	}
@@ -123,6 +127,9 @@ func (m *Memory) AddProgram(program *Program) (offset uint, err error) {
 var ErrProgramOverlapsExistingPrograms = errors.New("program overlaps existing programs")
 
 func (m *Memory) AddProgramAtOffset(program *Program, offset uint) error {
+	if len(program.Instructions()) < 1 {
+		return ErrProgramEmpty
+	}
 	if offset+uint(len(program.Instructions())) > m.Size() {
 		return fmt.Errorf("offset %d with length %d: %w", offset, len(program.Instructions()), ErrExceedsMemorySize)
 	}
@@ -150,6 +157,9 @@ func (m *Memory) AddProgramAtOffset(program *Program, offset uint) error {
 }
 
 func (m *Memory) RemoveProgram(program *Program, loadedOffset uint) error {
+	if len(program.instructions) < 1 {
+		return ErrProgramEmpty
+	}
 	var programMask uint32 = ((0b1 << len(program.instructions)) - 1) << loadedOffset
 	for i := 0; i < len(program.instructions); i++ {
 		m.initialized[loadedOffset+uint(i)] = false

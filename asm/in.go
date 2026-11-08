@@ -1,0 +1,40 @@
+package asm
+
+const InstructionTypeIn InstructionType = 0b010
+
+type InSource uint8
+
+const (
+	InSourcePins InSource = 0b000
+	InSourceX    InSource = 0b001
+	InSourceY    InSource = 0b010
+	InSourceNull InSource = 0b011
+	InSourceISR  InSource = 0b110
+	InSourceOSR  InSource = 0b111
+)
+
+type In struct {
+	source   InSource
+	bitCount uint8
+}
+
+func NewIn(source InSource, bitCount uint8) In {
+	return In{
+		source:   source & 0b111,
+		bitCount: bitCount & 0b11111,
+	}
+}
+
+func (i In) Source() InSource { return i.source }
+func (i In) BitCount() uint8  { return i.bitCount }
+
+func DecodeIn(instr uint16) In {
+	return In{
+		source:   InSource((instr >> 5) & 0b111),
+		bitCount: uint8(instr & 0b11111),
+	}
+}
+
+func (i In) Encode() uint16 {
+	return uint16(InstructionTypeIn)<<13 | uint16(i.source)<<5 | uint16(i.bitCount)
+}

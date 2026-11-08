@@ -808,7 +808,6 @@ func (sm *StateMachine) dividedTick() error {
 type instruction uint
 
 const (
-	instructionJump     instruction = 0b000
 	instructionWait     instruction = 0b001
 	instructionIn       instruction = 0b010
 	instructionOut      instruction = 0b011
@@ -825,8 +824,6 @@ func (sm *StateMachine) execute(instr uint16, currentlyStalled bool) (jumped boo
 
 	switch instructionType {
 	case instructionJump:
-		condition := jumpCondition((instr >> 5) & 0b111)
-		address := uint(instr & 0b11111)
 		jumped, err = sm.executeJump(condition, address)
 		if err != nil {
 			return false, false, fmt.Errorf("jump: %w", err)
@@ -946,21 +943,6 @@ func (sm *StateMachine) incrementProgramCounter() {
 var ErrXRegisterNotInitialized = errors.New("x register not initialized")
 var ErrYRegisterNotInitialized = errors.New("y register not initialized")
 
-type jumpCondition uint
-
-const (
-	jumpAlways                jumpCondition = 0b000
-	jumpXZero                 jumpCondition = 0b001
-	jumpXNonZeroThenDecrement jumpCondition = 0b010
-	jumpYZero                 jumpCondition = 0b011
-	jumpYNonZeroThenDecrement jumpCondition = 0b100
-	jumpXNotEqualY            jumpCondition = 0b101
-	jumpPin                   jumpCondition = 0b110
-	jumpOSRENotEmpty          jumpCondition = 0b111
-)
-
-var ErrJumpConditionInvalid = errors.New("jump condition invalid")
-
 func (sm *StateMachine) executeJump(condition jumpCondition, address uint) (jumped bool, err error) {
 	var shouldJump bool
 	switch condition {
@@ -1010,14 +992,6 @@ func (sm *StateMachine) executeJump(condition jumpCondition, address uint) (jump
 	return jumped, nil
 }
 
-type waitSource uint
-
-const (
-	waitSourceGPIO waitSource = 0b00
-	waitSourcePin  waitSource = 0b01
-	waitSourceIRQ  waitSource = 0b10
-)
-
 var ErrWaitSourceInvalid = errors.New("wait source invalid")
 
 func (sm *StateMachine) executeWait(polarity bool, source waitSource, index uint) (stalled bool, err error) {
@@ -1049,14 +1023,7 @@ func (sm *StateMachine) executeWait(polarity bool, source waitSource, index uint
 
 type inSource uint
 
-const (
-	inSourcePins inSource = 0b000
-	inSourceX    inSource = 0b001
-	inSourceY    inSource = 0b010
-	inSourceNull inSource = 0b011
-	inSourceISR  inSource = 0b110
-	inSourceOSR  inSource = 0b111
-)
+const ()
 
 var ErrInSourceInvalid = errors.New("in source invalid")
 
@@ -1113,16 +1080,7 @@ func (sm *StateMachine) executeIn(source inSource, count uint, currentlyStalled 
 
 type outDestination uint
 
-const (
-	outDestinationPins               outDestination = 0b000
-	outDestinationX                  outDestination = 0b001
-	outDestinationY                  outDestination = 0b010
-	outDestinationNull               outDestination = 0b011
-	outDestinationPinDirections      outDestination = 0b100
-	outDestinationProgramCounter     outDestination = 0b101
-	outDestinationInputShiftRegister outDestination = 0b110
-	outDestinationEXEC               outDestination = 0b111
-)
+const ()
 
 var ErrOutDestinationInvalid = errors.New("out destination invalid")
 
@@ -1238,32 +1196,6 @@ func (sm *StateMachine) executePushOrPull(isPull bool, ifThreshold bool, block b
 	}
 	return stalled, nil
 }
-
-type moveDestination uint
-type moveOperation uint
-type moveSource uint
-
-const (
-	moveDestinationPins moveDestination = 0b000
-	moveDestinationX    moveDestination = 0b001
-	moveDestinationY    moveDestination = 0b010
-	moveDestinationEXEC moveDestination = 0b100
-	moveDestinationPC   moveDestination = 0b101
-	moveDestinationISR  moveDestination = 0b110
-	moveDestinationOSR  moveDestination = 0b111
-
-	moveOperationNone       moveOperation = 0b00
-	moveOperationInvert     moveOperation = 0b01
-	moveOperationBitReverse moveOperation = 0b10
-
-	moveSourcePins   moveSource = 0b000
-	moveSourceX      moveSource = 0b001
-	moveSourceY      moveSource = 0b010
-	moveSourceNull   moveSource = 0b011
-	moveSourceStatus moveSource = 0b101
-	moveSourceISR    moveSource = 0b110
-	moveSourceOSR    moveSource = 0b111
-)
 
 var ErrMoveSourceInvalid = errors.New("move source invalid")
 var ErrCannotMoveFromOSRWhileAutopullEnabled = errors.New("cannot move from OSR while autopull enabled")
@@ -1401,15 +1333,6 @@ func (sm *StateMachine) executeIRQ(clearIRQ bool, waitIRQ bool, index uint, curr
 
 	return false, nil
 }
-
-type setDestination uint
-
-const (
-	setDestinationPins          setDestination = 0b000
-	setDestinationX             setDestination = 0b001
-	setDestinationY             setDestination = 0b010
-	setDestinationPinDirections setDestination = 0b100
-)
 
 var ErrSetDestinationInvalid = errors.New("set destination invalid")
 
