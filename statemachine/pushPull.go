@@ -65,6 +65,9 @@ func executePushPull(i instr.PushPull, input pushPullInput) (pushPullOutput, err
 			}
 			output.newInputShiftRegister = 0
 			output.newInputShiftRegisterCounter = 0
+		} else if shouldPush && !i.Block() {
+			output.newInputShiftRegister = 0
+			output.newInputShiftRegisterCounter = 0
 		}
 	}
 	return output, nil
