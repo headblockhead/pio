@@ -16,14 +16,14 @@ import (
 
 var programTX = memory.NewProgramWithOrigin([]uint16{
 	//     .wrap_target
-	instr.NewOut(instr.OutDestinationX, 1).Encode(),                                                                  //  0: out    x, 1
-	instr.NewJump(instr.JumpXZero, 4).Encode() | instr.NewSideset(0b1).Encode(1, true) | instr.NewDelay(6).Encode(),  //  1: jmp    !x, 4           side 1 [6]
-	instr.NewMove(instr.MoveDestinationY, instr.MoveOperationNone, instr.MoveSourceY).Encode(),                       //  2: nop
+	instr.NewOut(instr.OutDestinationX, 1).Encode(),                                                                 //  0: out    x, 1
+	instr.NewJump(instr.JumpXZero, 4).Encode() | instr.NewSideset(0b1).Encode(1, true) | instr.NewDelay(6).Encode(), //  1: jmp    !x, 4           side 1 [6]
+	instr.EncodeNOP(), //  2: nop
 	instr.NewJump(instr.JumpAlways, 0).Encode() | instr.NewSideset(0b0).Encode(1, true) | instr.NewDelay(6).Encode(), //  3: jmp    0               side 0 [6]
 	instr.NewJump(instr.JumpAlways, 5).Encode() | instr.NewDelay(7).Encode(),                                         //  4: jmp    5                      [7]
 	instr.NewOut(instr.OutDestinationX, 1).Encode(),                                                                  //  5: out    x, 1
 	instr.NewJump(instr.JumpXZero, 9).Encode() | instr.NewSideset(0b0).Encode(1, true) | instr.NewDelay(6).Encode(),  //  6: jmp    !x, 9           side 0 [6]
-	instr.NewMove(instr.MoveDestinationY, instr.MoveOperationNone, instr.MoveSourceY).Encode(),                       //  7: nop
+	instr.EncodeNOP(), //  7: nop
 	instr.NewJump(instr.JumpAlways, 5).Encode() | instr.NewSideset(0b1).Encode(1, true) | instr.NewDelay(6).Encode(), //  8: jmp    5               side 1 [6]
 	instr.NewJump(instr.JumpAlways, 0).Encode() | instr.NewDelay(7).Encode(),                                         //  9: jmp    0                      [7]
 	//     .wrap

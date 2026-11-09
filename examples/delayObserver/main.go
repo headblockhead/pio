@@ -6,6 +6,7 @@ import (
 
 	"git.edwardh.dev/pio"
 	"git.edwardh.dev/pio/gpio"
+	"git.edwardh.dev/pio/instr"
 	"git.edwardh.dev/pio/memory"
 	"git.edwardh.dev/pio/simulation"
 )
@@ -14,12 +15,12 @@ import (
 // This allows the number of cycles between writing a value to a pin, and reading that new value back, to be measured using the returned data.
 
 var programOutputObserver = memory.NewProgram([]uint16{
-	0b1110000010000001, //  0: set    pindirs, 1
-	0b1110000000000000, //  1: set    pins, 0
-	0b1011111101000010, //  2: nop                           [31]
-	0b1110000000000001, //  3: set    pins, 1
+	instr.NewSet(instr.SetDestinationPinDirections, 1).Encode(), //  0: set    pindirs, 1
+	instr.NewSet(instr.SetDestinationPins, 0).Encode(),          //  1: set    pins, 0
+	instr.EncodeNOP() | instr.NewDelay(31).Encode(),             //  2: nop                           [31]
+	instr.NewSet(instr.SetDestinationPins, 1).Encode(),          //  3: set    pins, 1
 	//     .wrap_target
-	0b0100000000000001, //  4: in     pins, 1
+	instr.NewIn(instr.InSourcePins, 1).Encode(), //  4: in     pins, 1
 	//     .wrap
 })
 
