@@ -1077,9 +1077,11 @@ func (sm *StateMachine) execute(instr uint16, currentlyStalled bool) (jumped boo
 			pinCountSideset -= 1
 		}
 		ss := instruction.DecodeSideset(instr, pinCountSideset, sm.sidesetIsOptional)
-		sidesetData := ss.Data()
-		sm.pinSidesets = bits.RotateLeft32(uint32(sidesetData), int(sm.baseSidesetPin))
-		sm.pinSidesetsMask = bits.RotateLeft32((0b1<<pinCountSideset)-1, int(sm.baseSidesetPin))
+		if ss.Active() {
+			sidesetData := ss.Data()
+			sm.pinSidesets = bits.RotateLeft32(uint32(sidesetData), int(sm.baseSidesetPin))
+			sm.pinSidesetsMask = bits.RotateLeft32((0b1<<pinCountSideset)-1, int(sm.baseSidesetPin))
+		}
 	}
 
 	if (sm.bitCountSideset < 5) && !sm.newForcedInstruction {

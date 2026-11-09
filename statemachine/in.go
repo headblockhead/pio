@@ -80,7 +80,7 @@ func ExecuteIn(instr instruction.In, input InInput) (InOutput, error) {
 		}
 	}
 
-	shouldPush := input.AutopushEnabled && (input.InputShiftRegisterCounter >= input.PushThreshold)
+	shouldPush := input.AutopushEnabled && (output.NewInputShiftRegisterCounter >= input.PushThreshold)
 	output.ShouldStall = shouldPush && input.FIFORX.IsFull()
 	if shouldPush && !input.FIFORX.IsFull() {
 		err := input.FIFORX.Write(output.NewInputShiftRegister)
