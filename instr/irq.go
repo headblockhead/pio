@@ -1,4 +1,4 @@
-package instruction
+package instr
 
 const TypeIRQ Type = 0b110
 
@@ -29,7 +29,7 @@ func DecodeIRQ(instr uint16) IRQ {
 }
 
 func (i IRQ) Encode() uint16 {
-	var encoded uint16 = uint16(TypeIRQ)<<13 | uint16(i.index)
+	var encoded = uint16(TypeIRQ)<<13 | uint16(i.index)
 	if i.clear {
 		encoded |= 0b1 << 6
 	}

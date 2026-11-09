@@ -6,7 +6,7 @@ import (
 	"math/bits"
 
 	"git.edwardh.dev/pio/fifo"
-	"git.edwardh.dev/pio/instruction"
+	"git.edwardh.dev/pio/instr"
 )
 
 type inInput struct {
@@ -35,8 +35,8 @@ type inOutput struct {
 
 var ErrInSourceInvalid = errors.New("in source invalid")
 
-func executeIn(instr instruction.In, input inInput) (inOutput, error) {
-	var output inOutput = inOutput{
+func executeIn(i instr.In, input inInput) (inOutput, error) {
+	var output = inOutput{
 		newInputShiftRegister:        input.inputShiftRegister,
 		newInputShiftRegisterCounter: input.inputShiftRegisterCounter,
 		shouldStall:                  false,
@@ -44,37 +44,37 @@ func executeIn(instr instruction.In, input inInput) (inOutput, error) {
 
 	if !input.alreadyStalled {
 		var data uint32
-		var mask uint32 = (0b1 << instr.BitCount()) - 1
-		switch instr.Source() {
-		case instruction.InSourcePins:
+		var mask uint32 = (0b1 << i.BitCount()) - 1
+		switch i.Source() {
+		case instr.InSourcePins:
 			data = bits.RotateLeft32(input.pinInputs, -int(input.baseInPin)) & mask
-		case instruction.InSourceX:
+		case instr.InSourceX:
 			if !input.xRegisterInitialized {
 				return output, ErrXRegisterNotInitialized
 			}
 			data = (input.xRegister & mask)
-		case instruction.InSourceY:
+		case instr.InSourceY:
 			if !input.yRegisterInitialized {
 				return output, ErrYRegisterNotInitialized
 			}
 			data = (input.yRegister & mask)
-		case instruction.InSourceNull:
+		case instr.InSourceNull:
 			data = 0
-		case instruction.InSourceISR:
+		case instr.InSourceISR:
 			data = (input.inputShiftRegister & mask)
-		case instruction.InSourceOSR:
+		case instr.InSourceOSR:
 			data = (input.outputShiftRegister & mask)
 		default:
 			return output, ErrInSourceInvalid
 		}
 		if input.inShiftMovesRight {
-			output.newInputShiftRegister >>= instr.BitCount()
-			output.newInputShiftRegister |= (data << (32 - instr.BitCount()))
+			output.newInputShiftRegister >>= i.BitCount()
+			output.newInputShiftRegister |= (data << (32 - i.BitCount()))
 		} else {
-			output.newInputShiftRegister <<= instr.BitCount()
+			output.newInputShiftRegister <<= i.BitCount()
 			output.newInputShiftRegister |= data
 		}
-		output.newInputShiftRegisterCounter += instr.BitCount()
+		output.newInputShiftRegisterCounter += i.BitCount()
 		if output.newInputShiftRegisterCounter > 32 {
 			output.newInputShiftRegisterCounter = 32
 		}

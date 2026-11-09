@@ -6,6 +6,7 @@ import (
 
 	"git.edwardh.dev/pio"
 	"git.edwardh.dev/pio/gpio"
+	"git.edwardh.dev/pio/instr"
 	"git.edwardh.dev/pio/memory"
 	"git.edwardh.dev/pio/simulation"
 	"git.edwardh.dev/pio/statemachine"
@@ -15,16 +16,16 @@ import (
 
 var programTX = memory.NewProgramWithOrigin([]uint16{
 	//     .wrap_target
-	0x6021, //  0: out    x, 1
-	0x1e24, //  1: jmp    !x, 4           side 1 [6]
-	0xa042, //  2: nop
-	0x1600, //  3: jmp    0               side 0 [6]
-	0x0705, //  4: jmp    5                      [7]
-	0x6021, //  5: out    x, 1
-	0x1629, //  6: jmp    !x, 9           side 0 [6]
-	0xa042, //  7: nop
-	0x1e05, //  8: jmp    5               side 1 [6]
-	0x0700, //  9: jmp    0                      [7]
+	instr.NewOut(instr.OutDestinationX, 1).Encode(),                                                                  //  0: out    x, 1
+	instr.NewJump(instr.JumpXZero, 4).Encode() | instr.NewSideset(0b1).Encode(1, true) | instr.NewDelay(6).Encode(),  //  1: jmp    !x, 4           side 1 [6]
+	instr.NewMove(instr.MoveDestinationY, instr.MoveOperationNone, instr.MoveSourceY).Encode(),                       //  2: nop
+	instr.NewJump(instr.JumpAlways, 0).Encode() | instr.NewSideset(0b0).Encode(1, true) | instr.NewDelay(6).Encode(), //  3: jmp    0               side 0 [6]
+	instr.NewJump(instr.JumpAlways, 5).Encode() | instr.NewDelay(7).Encode(),                                         //  4: jmp    5                      [7]
+	instr.NewOut(instr.OutDestinationX, 1).Encode(),                                                                  //  5: out    x, 1
+	instr.NewJump(instr.JumpXZero, 9).Encode() | instr.NewSideset(0b0).Encode(1, true) | instr.NewDelay(6).Encode(),  //  6: jmp    !x, 9           side 0 [6]
+	instr.NewMove(instr.MoveDestinationY, instr.MoveOperationNone, instr.MoveSourceY).Encode(),                       //  7: nop
+	instr.NewJump(instr.JumpAlways, 5).Encode() | instr.NewSideset(0b1).Encode(1, true) | instr.NewDelay(6).Encode(), //  8: jmp    5               side 1 [6]
+	instr.NewJump(instr.JumpAlways, 0).Encode() | instr.NewDelay(7).Encode(),                                         //  9: jmp    0                      [7]
 	//     .wrap
 }, 0)
 
@@ -32,17 +33,17 @@ const programTXWrapFrom uint8 = 9
 const programTXWrapTo uint8 = 0
 
 var programRX = memory.NewProgramWithOrigin([]uint16{
-	0x2ba0, //  0: wait   1 pin, 0               [11]
-	0x00c4, //  1: jmp    pin, 4
-	0x4021, //  2: in     x, 1
-	0x0000, //  3: jmp    0
-	0x4141, //  4: in     y, 1                   [1]
+	instr.NewWait(true, instr.WaitSourcePin, 0).Encode() | instr.NewDelay(11).Encode(), //  0: wait   1 pin, 0               [11]
+	instr.NewJump(instr.JumpPin, 4).Encode(),                                           //  1: jmp    pin, 4
+	instr.NewIn(instr.InSourceX, 1).Encode(),                                           //  2: in     x, 1
+	instr.NewJump(instr.JumpAlways, 0).Encode(),                                        //  3: jmp    0
+	instr.NewIn(instr.InSourceY, 1).Encode() | instr.NewDelay(1).Encode(),              //  4: in     y, 1                   [1]
 	//     .wrap_target
-	0x2b20, //  5: wait   0 pin, 0               [11]
-	0x00c9, //  6: jmp    pin, 9
-	0x4041, //  7: in     y, 1
-	0x0000, //  8: jmp    0
-	0x4121, //  9: in     x, 1                   [1]
+	instr.NewWait(false, instr.WaitSourcePin, 0).Encode() | instr.NewDelay(11).Encode(), //  5: wait   0 pin, 0               [11]
+	instr.NewJump(instr.JumpPin, 9).Encode(),                                            //  6: jmp    pin, 9
+	instr.NewIn(instr.InSourceY, 1).Encode(),                                            //  7: in     y, 1
+	instr.NewJump(instr.JumpAlways, 0).Encode(),                                         //  8: jmp    0
+	instr.NewIn(instr.InSourceX, 1).Encode() | instr.NewDelay(1).Encode(),               //  9: in     x, 1                   [1]
 	//     .wrap
 }, 0)
 
@@ -155,10 +156,10 @@ func setupA(r *pio.RP2040) {
 	_ = sm0.SetFIFOJoin(statemachine.FIFOJoinTX)                      // sm_config_set_fifo_join
 	_ = sm0.SetClockDivisor(125.0 / (16 * 5))                         // sm_config_set_clkdiv
 
-	sm0.Init(offset) // pio_sm_init
+	_ = sm0.Init(offset) // pio_sm_init
 
-	var blockingPullInstruction uint16 = 0b1000000010100000 // pio_encode_pull(false, true)
-	sm0.ForceInstruction(blockingPullInstruction)           // pio_sm_exec
+	blockingPullInstruction := instr.NewPushPull(true, false, true).Encode() // pio_encode_pull(false, true)
+	sm0.ForceInstruction(blockingPullInstruction)                            // pio_sm_exec
 
 	sm0.SetEnabled(true) // pio_sm_set_enabled
 }
@@ -184,11 +185,11 @@ func setupB(r *pio.RP2040) {
 	_ = sm0.SetFIFOJoin(statemachine.FIFOJoinRX)                      // sm_config_set_fifo_join
 	_ = sm0.SetClockDivisor(125.0 / (16 * 5))                         // sm_config_set_clkdiv
 
-	sm0.Init(offset) // pio_sm_init
+	_ = sm0.Init(offset) // pio_sm_init
 
-	var setXInstruction uint16 = 0b1110000000100001 // pio_encode_set(pio_x, 1)
-	var setYInstruction uint16 = 0b1110000001000000 // pio_encode_set(pio_y, 0)
-	sm0.ForceInstruction(setXInstruction)           // pio_sm_exec
+	setXInstruction := instr.NewSet(instr.SetDestinationX, 1).Encode() // pio_encode_set(pio_x, 1)
+	setYInstruction := instr.NewSet(instr.SetDestinationY, 0).Encode() // pio_encode_set(pio_y, 0)
+	sm0.ForceInstruction(setXInstruction)                              // pio_sm_exec
 	// The state machine must be manually ticked forward once here, as unlike in hardware, it is not continuously running in the background.
 	// If it was not ticked here, the second ForceInstruction call would correctly overwrite the first, before the first instruction had a chance to execute.
 	_ = sm0.Tick()

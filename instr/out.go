@@ -1,4 +1,4 @@
-package instruction
+package instr
 
 const TypeOut Type = 0b011
 

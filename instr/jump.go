@@ -1,4 +1,4 @@
-package instruction
+package instr
 
 const TypeJump Type = 0b000
 

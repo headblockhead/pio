@@ -1,4 +1,4 @@
-package instruction
+package instr
 
 const TypeMove Type = 0b101
 

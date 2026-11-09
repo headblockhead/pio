@@ -1,4 +1,4 @@
-package instruction
+package instr
 
 const TypeIn Type = 0b010
 

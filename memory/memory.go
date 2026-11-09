@@ -138,13 +138,13 @@ func (m *Memory) AddProgramAtOffset(program *Program, offset uint8) error {
 		return ErrProgramOverlapsExistingPrograms
 	}
 	updatedInstructions := slices.Clone(program.Instructions())
-	for i, instr := range updatedInstructions {
-		instructionType := (instr >> 13) & 0b111
+	for i, instruction := range updatedInstructions {
+		instructionType := (instruction >> 13) & 0b111
 		// update jump instructions to point to the correct offset
 		if instructionType == 0b000 {
-			var originalAddress = instr & 0b11111
+			var originalAddress = instruction & 0b11111
 			var offsetAddress = originalAddress + uint16(offset)
-			var newInstruction = (instr & 0b1111111111100000) | (offsetAddress & 0b11111)
+			var newInstruction = (instruction & 0b1111111111100000) | (offsetAddress & 0b11111)
 			updatedInstructions[i] = newInstruction
 		}
 	}

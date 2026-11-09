@@ -3,7 +3,7 @@ package statemachine
 import (
 	"errors"
 
-	"git.edwardh.dev/pio/instruction"
+	"git.edwardh.dev/pio/instr"
 )
 
 type jumpInput struct {
@@ -26,38 +26,38 @@ type jumpOutput struct {
 
 var ErrJumpConditionInvalid = errors.New("jump condition invalid")
 
-func executeJump(instr instruction.Jump, input jumpInput) (jumpOutput, error) {
+func executeJump(i instr.Jump, input jumpInput) (jumpOutput, error) {
 	var shouldJump bool
 	var output jumpOutput
 
-	address := instr.Address()
+	address := i.Address()
 
-	switch instr.Condition() {
-	case instruction.JumpAlways:
+	switch i.Condition() {
+	case instr.JumpAlways:
 		shouldJump = true
-	case instruction.JumpXZero:
+	case instr.JumpXZero:
 		if !input.xRegisterInitialized {
 			return output, ErrXRegisterNotInitialized
 		}
 		shouldJump = (input.xRegister == 0)
-	case instruction.JumpXNonZeroThenDecrement:
+	case instr.JumpXNonZeroThenDecrement:
 		if !input.xRegisterInitialized {
 			return output, ErrXRegisterNotInitialized
 		}
 		shouldJump = (input.xRegister != 0)
 		output.decrementXRegister = true
-	case instruction.JumpYZero:
+	case instr.JumpYZero:
 		if !input.yRegisterInitialized {
 			return output, ErrYRegisterNotInitialized
 		}
 		shouldJump = (input.yRegister == 0)
-	case instruction.JumpYNonZeroThenDecrement:
+	case instr.JumpYNonZeroThenDecrement:
 		if !input.yRegisterInitialized {
 			return output, ErrYRegisterNotInitialized
 		}
 		shouldJump = (input.yRegister != 0)
 		output.decrementYRegister = true
-	case instruction.JumpXNotEqualY:
+	case instr.JumpXNotEqualY:
 		if !input.xRegisterInitialized {
 			return output, ErrXRegisterNotInitialized
 		}
@@ -65,9 +65,9 @@ func executeJump(instr instruction.Jump, input jumpInput) (jumpOutput, error) {
 			return output, ErrYRegisterNotInitialized
 		}
 		shouldJump = (input.xRegister != input.yRegister)
-	case instruction.JumpPin:
+	case instr.JumpPin:
 		shouldJump = (input.pinInputs>>input.jumpPin)&0b1 == 1
-	case instruction.JumpOSRENotEmpty:
+	case instr.JumpOSRENotEmpty:
 		shouldJump = input.outputShiftRegisterCounter < input.pullThreshold
 	default:
 		return output, ErrJumpConditionInvalid

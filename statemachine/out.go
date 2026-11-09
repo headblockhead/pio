@@ -6,7 +6,7 @@ import (
 	"math/bits"
 
 	"git.edwardh.dev/pio/fifo"
-	"git.edwardh.dev/pio/instruction"
+	"git.edwardh.dev/pio/instr"
 )
 
 type outInput struct {
@@ -51,8 +51,8 @@ type outOutput struct {
 
 var ErrOutDestinationInvalid = errors.New("out destination invalid")
 
-func executeOut(instr instruction.Out, input outInput) (outOutput, error) {
-	var output outOutput = outOutput{
+func executeOut(i instr.Out, input outInput) (outOutput, error) {
+	var output = outOutput{
 		newOutputShiftRegister:        input.outputShiftRegister,
 		newOutputShiftRegisterCounter: input.outputShiftRegisterCounter,
 	}
@@ -72,20 +72,20 @@ func executeOut(instr instruction.Out, input outInput) (outOutput, error) {
 	}
 
 	var data uint32
-	var mask uint32 = (0b1 << instr.BitCount()) - 1
+	var mask uint32 = (0b1 << i.BitCount()) - 1
 	if input.outShiftMovesRight {
 		data = input.outputShiftRegister & mask
-		output.newOutputShiftRegister >>= instr.BitCount()
+		output.newOutputShiftRegister >>= i.BitCount()
 	} else {
-		data = (input.outputShiftRegister >> (32 - instr.BitCount()))
-		output.newOutputShiftRegister <<= instr.BitCount()
+		data = (input.outputShiftRegister >> (32 - i.BitCount()))
+		output.newOutputShiftRegister <<= i.BitCount()
 	}
-	output.newOutputShiftRegisterCounter += instr.BitCount()
+	output.newOutputShiftRegisterCounter += i.BitCount()
 	if output.newOutputShiftRegisterCounter > 32 {
 		output.newOutputShiftRegisterCounter = 32
 	}
 
-	isPinOperation := instr.Destination() == instruction.OutDestinationPins || instr.Destination() == instruction.OutDestinationPinDirections
+	isPinOperation := i.Destination() == instr.OutDestinationPins || i.Destination() == instr.OutDestinationPinDirections
 
 	outWriteEnable := ((data >> input.outWriteEnableBitIndex) & 0b1) == 1
 	writePins := true
@@ -102,33 +102,33 @@ func executeOut(instr instruction.Out, input outInput) (outOutput, error) {
 	var pinData = bits.RotateLeft32(data, int(input.baseOutPin))
 	var pinMask = bits.RotateLeft32((0b1<<input.pinCountOut)-1, int(input.baseOutPin))
 
-	switch instr.Destination() {
-	case instruction.OutDestinationPins:
+	switch i.Destination() {
+	case instr.OutDestinationPins:
 		if writePins {
 			output.newPinOutputs = pinData
 			output.newPinOutputsMask = pinMask
 		}
-	case instruction.OutDestinationX:
+	case instr.OutDestinationX:
 		output.newXRegister = data
 		output.writtenToXRegister = true
-	case instruction.OutDestinationY:
+	case instr.OutDestinationY:
 		output.newYRegister = data
 		output.writtenToYRegister = true
-	case instruction.OutDestinationNull:
+	case instr.OutDestinationNull:
 		// discards data
-	case instruction.OutDestinationPinDirections:
+	case instr.OutDestinationPinDirections:
 		if writePins {
 			output.newPinOutputEnables = pinData
 			output.newPinOutputEnablesMask = pinMask
 		}
-	case instruction.OutDestinationProgramCounter:
+	case instr.OutDestinationProgramCounter:
 		output.jumped = true
 		output.newProgramCounter = uint8(data % 32)
-	case instruction.OutDestinationInputShiftRegister:
+	case instr.OutDestinationInputShiftRegister:
 		output.writtenToInputShiftRegister = true
 		output.newInputShiftRegister = data
-		output.newInputShiftRegisterCounter = instr.BitCount()
-	case instruction.OutDestinationEXEC:
+		output.newInputShiftRegisterCounter = i.BitCount()
+	case instr.OutDestinationEXEC:
 		output.newEXECdInstruction = true
 		output.execdInstruction = uint16(data)
 	default:

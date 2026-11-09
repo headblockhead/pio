@@ -6,7 +6,7 @@ import (
 	"math/bits"
 
 	"git.edwardh.dev/pio/fifo"
-	"git.edwardh.dev/pio/instruction"
+	"git.edwardh.dev/pio/instr"
 	"git.edwardh.dev/pio/memory"
 	"git.edwardh.dev/pio/simulation"
 )
@@ -768,13 +768,13 @@ func (sm *StateMachine) dividedTick() error {
 		}
 		sm.execdInstructionStalled = stalled
 	} else if sm.stalled {
-		instr, err := sm.memoryReader.Read(sm.programCounter)
+		instruction, err := sm.memoryReader.Read(sm.programCounter)
 		if err != nil {
 			return fmt.Errorf("error reading instruction memory: %w", err)
 		}
-		jumped, stalled, err := sm.execute(instr, true)
+		jumped, stalled, err := sm.execute(instruction, true)
 		if err != nil {
-			return fmt.Errorf("error executing stalled instruction %016b: %w", instr, err)
+			return fmt.Errorf("error executing stalled instruction %016b: %w", instruction, err)
 		}
 		if !jumped && !stalled {
 			sm.incrementProgramCounter()
@@ -787,13 +787,13 @@ func (sm *StateMachine) dividedTick() error {
 		}
 		sm.delaysRemaining--
 	} else {
-		instr, err := sm.memoryReader.Read(sm.programCounter)
+		instruction, err := sm.memoryReader.Read(sm.programCounter)
 		if err != nil {
 			return fmt.Errorf("error reading instruction memory: %w", err)
 		}
-		jumped, stalled, err := sm.execute(instr, false)
+		jumped, stalled, err := sm.execute(instruction, false)
 		if err != nil {
-			return fmt.Errorf("error executing instruction %016b at address %d: %w", instr, sm.programCounter, err)
+			return fmt.Errorf("error executing instruction %016b at address %d: %w", instruction, sm.programCounter, err)
 		}
 		if !jumped && !stalled {
 			sm.incrementProgramCounter()
@@ -805,11 +805,11 @@ func (sm *StateMachine) dividedTick() error {
 
 var ErrInstructionTypeInvalid = errors.New("instruction type invalid")
 
-func (sm *StateMachine) execute(instr uint16, currentlyStalled bool) (jumped bool, stalled bool, err error) {
-	switch instruction.DecodeType(instr) {
-	case instruction.TypeJump:
-		j := instruction.DecodeJump(instr)
-		output, err := executeJump(j, jumpInput{
+func (sm *StateMachine) execute(instruction uint16, currentlyStalled bool) (jumped bool, stalled bool, err error) {
+	switch instr.DecodeType(instruction) {
+	case instr.TypeJump:
+		decoded := instr.DecodeJump(instruction)
+		output, err := executeJump(decoded, jumpInput{
 			jumpPin:                    sm.jumpPin,
 			outputShiftRegisterCounter: sm.outputShiftRegisterCounter,
 			pinInputs:                  sm.pinInputs,
@@ -832,9 +832,9 @@ func (sm *StateMachine) execute(instr uint16, currentlyStalled bool) (jumped boo
 			jumped = true
 			sm.programCounter = output.newProgramCounter
 		}
-	case instruction.TypeWait:
-		w := instruction.DecodeWait(instr)
-		output, err := executeWait(w, waitInput{
+	case instr.TypeWait:
+		decoded := instr.DecodeWait(instruction)
+		output, err := executeWait(decoded, waitInput{
 			baseInPin:         sm.baseInPin,
 			irqInputs:         sm.irqInputs,
 			pinInputs:         sm.pinInputs,
@@ -850,9 +850,9 @@ func (sm *StateMachine) execute(instr uint16, currentlyStalled bool) (jumped boo
 		if output.shouldStall {
 			stalled = true
 		}
-	case instruction.TypeIn:
-		i := instruction.DecodeIn(instr)
-		output, err := executeIn(i, inInput{
+	case instr.TypeIn:
+		decoded := instr.DecodeIn(instruction)
+		output, err := executeIn(decoded, inInput{
 			alreadyStalled:            currentlyStalled,
 			autopushEnabled:           sm.autopushEnabled,
 			baseInPin:                 sm.baseInPin,
@@ -877,9 +877,9 @@ func (sm *StateMachine) execute(instr uint16, currentlyStalled bool) (jumped boo
 		if output.shouldStall {
 			stalled = true
 		}
-	case instruction.TypeOut:
-		o := instruction.DecodeOut(instr)
-		output, err := executeOut(o, outInput{
+	case instr.TypeOut:
+		decoded := instr.DecodeOut(instruction)
+		output, err := executeOut(decoded, outInput{
 			autopullEnabled:              sm.autopullEnabled,
 			baseOutPin:                   sm.baseOutPin,
 			outShiftMovesRight:           sm.outShiftMovesRight,
@@ -931,9 +931,9 @@ func (sm *StateMachine) execute(instr uint16, currentlyStalled bool) (jumped boo
 		if output.shouldStall {
 			stalled = true
 		}
-	case instruction.TypePushPull:
-		pp := instruction.DecodePushPull(instr)
-		output, err := executePushPull(pp, pushPullInput{
+	case instr.TypePushPull:
+		decoded := instr.DecodePushPull(instruction)
+		output, err := executePushPull(decoded, pushPullInput{
 			autopullEnabled:            sm.autopullEnabled,
 			inputShiftRegister:         sm.inputShiftRegister,
 			inputShiftRegisterCounter:  sm.inputShiftRegisterCounter,
@@ -957,9 +957,9 @@ func (sm *StateMachine) execute(instr uint16, currentlyStalled bool) (jumped boo
 		if output.shouldStall {
 			stalled = true
 		}
-	case instruction.TypeMove:
-		m := instruction.DecodeMove(instr)
-		output, err := executeMove(m, moveInput{
+	case instr.TypeMove:
+		decoded := instr.DecodeMove(instruction)
+		output, err := executeMove(decoded, moveInput{
 			autopullEnabled:              sm.autopullEnabled,
 			baseInPin:                    sm.baseInPin,
 			baseOutPin:                   sm.baseOutPin,
@@ -1017,9 +1017,9 @@ func (sm *StateMachine) execute(instr uint16, currentlyStalled bool) (jumped boo
 			sm.yRegister = output.newYRegister
 			sm.yRegisterInitialized = true
 		}
-	case instruction.TypeIRQ:
-		i := instruction.DecodeIRQ(instr)
-		output, err := executeIRQ(i, irqInput{
+	case instr.TypeIRQ:
+		decoded := instr.DecodeIRQ(instruction)
+		output, err := executeIRQ(decoded, irqInput{
 			alreadyStalled:    currentlyStalled,
 			irqInputs:         sm.irqInputs,
 			stateMachineIndex: sm.index,
@@ -1038,9 +1038,9 @@ func (sm *StateMachine) execute(instr uint16, currentlyStalled bool) (jumped boo
 		if output.shouldStall {
 			stalled = true
 		}
-	case instruction.TypeSet:
-		s := instruction.DecodeSet(instr)
-		output, err := executeSet(s, setInput{
+	case instr.TypeSet:
+		decoded := instr.DecodeSet(instruction)
+		output, err := executeSet(decoded, setInput{
 			baseSetPin:  sm.baseSetPin,
 			pinCountSet: sm.pinCountSet,
 		})
@@ -1079,18 +1079,18 @@ func (sm *StateMachine) execute(instr uint16, currentlyStalled bool) (jumped boo
 		if sm.sidesetIsOptional {
 			pinCountSideset -= 1
 		}
-		ss := instruction.DecodeSideset(instr, pinCountSideset, sm.sidesetIsOptional)
-		if ss.Active() {
-			sidesetData := ss.Data()
+		decodedSideSet := instr.DecodeSideset(instruction, pinCountSideset, sm.sidesetIsOptional)
+		if decodedSideSet.Active() {
+			sidesetData := decodedSideSet.Data()
 			sm.pinSidesets = bits.RotateLeft32(uint32(sidesetData), int(sm.baseSidesetPin))
 			sm.pinSidesetsMask = bits.RotateLeft32((0b1<<pinCountSideset)-1, int(sm.baseSidesetPin))
 		}
 	}
 
-	if !(sm.newForcedInstruction || sm.forcedInstructionStalled) {
+	if !sm.newForcedInstruction && !sm.forcedInstructionStalled {
 		if sm.bitCountSideset < 5 {
-			d := instruction.DecodeDelay(instr, sm.bitCountSideset)
-			sm.delaysRemaining = d.Cycles()
+			decodedDelay := instr.DecodeDelay(instruction, sm.bitCountSideset)
+			sm.delaysRemaining = decodedDelay.Cycles()
 		} else {
 			sm.delaysRemaining = 0
 		}

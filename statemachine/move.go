@@ -5,7 +5,7 @@ import (
 	"math/bits"
 
 	"git.edwardh.dev/pio/fifo"
-	"git.edwardh.dev/pio/instruction"
+	"git.edwardh.dev/pio/instr"
 )
 
 type moveInput struct {
@@ -60,26 +60,26 @@ var ErrCannotMoveFromOSRWhileAutopullEnabled = errors.New("cannot move from OSR 
 var ErrMoveOperationInvalid = errors.New("move operation invalid")
 var ErrMoveDestinationInvalid = errors.New("move destination invalid")
 
-func executeMove(instr instruction.Move, input moveInput) (moveOutput, error) {
+func executeMove(i instr.Move, input moveInput) (moveOutput, error) {
 	var output moveOutput
 
 	var sourceData uint32
-	switch instr.Source() {
-	case instruction.MoveSourcePins:
+	switch i.Source() {
+	case instr.MoveSourcePins:
 		sourceData = bits.RotateLeft32(input.pinInputs, -int(input.baseInPin))
-	case instruction.MoveSourceX:
-		if !input.xRegisterInitialized && instr.Destination() != instruction.MoveDestinationX {
+	case instr.MoveSourceX:
+		if !input.xRegisterInitialized && i.Destination() != instr.MoveDestinationX {
 			return output, ErrXRegisterNotInitialized
 		}
 		sourceData = input.xRegister
-	case instruction.MoveSourceY:
-		if !input.yRegisterInitialized && instr.Destination() != instruction.MoveDestinationY {
+	case instr.MoveSourceY:
+		if !input.yRegisterInitialized && i.Destination() != instr.MoveDestinationY {
 			return output, ErrYRegisterNotInitialized
 		}
 		sourceData = input.yRegister
-	case instruction.MoveSourceNull:
+	case instr.MoveSourceNull:
 		sourceData = 0
-	case instruction.MoveSourceStatus:
+	case instr.MoveSourceStatus:
 		var fifoLevel uint
 		if input.statusValueUsesRXFIFO {
 			fifoLevel = input.fifoRX.Level()
@@ -91,9 +91,9 @@ func executeMove(instr instruction.Move, input moveInput) (moveOutput, error) {
 		} else {
 			sourceData = 0x00000000
 		}
-	case instruction.MoveSourceISR:
+	case instr.MoveSourceISR:
 		sourceData = input.inputShiftRegister
-	case instruction.MoveSourceOSR:
+	case instr.MoveSourceOSR:
 		if input.autopullEnabled {
 			return output, ErrCannotMoveFromOSRWhileAutopullEnabled
 		} else {
@@ -104,19 +104,19 @@ func executeMove(instr instruction.Move, input moveInput) (moveOutput, error) {
 	}
 
 	var modifiedData uint32
-	switch instr.Operation() {
-	case instruction.MoveOperationNone:
+	switch i.Operation() {
+	case instr.MoveOperationNone:
 		modifiedData = sourceData
-	case instruction.MoveOperationInvert:
+	case instr.MoveOperationInvert:
 		modifiedData = sourceData ^ 0xFFFFFFFF
-	case instruction.MoveOperationBitReverse:
+	case instr.MoveOperationBitReverse:
 		modifiedData = bits.Reverse32(sourceData)
 	default:
 		return output, ErrMoveOperationInvalid
 	}
 
-	switch instr.Destination() {
-	case instruction.MoveDestinationPins:
+	switch i.Destination() {
+	case instr.MoveDestinationPins:
 		outWriteEnable := ((modifiedData >> input.outWriteEnableBitIndex) & 0b1) == 1
 		writePins := true
 		if input.outWriteEnableUsed && !outWriteEnable {
@@ -132,27 +132,27 @@ func executeMove(instr instruction.Move, input moveInput) (moveOutput, error) {
 			output.newPinOutputsMask = bits.RotateLeft32((0b1<<input.pinCountOut)-1, int(input.baseOutPin))
 			output.newPinOutputs = bits.RotateLeft32(modifiedData, int(input.baseOutPin))
 		}
-	case instruction.MoveDestinationX:
-		if instr.Source() != instruction.MoveSourceX {
+	case instr.MoveDestinationX:
+		if i.Source() != instr.MoveSourceX {
 			output.writtenToXRegister = true
 			output.newXRegister = modifiedData
 		}
-	case instruction.MoveDestinationY:
-		if instr.Source() != instruction.MoveSourceY {
+	case instr.MoveDestinationY:
+		if i.Source() != instr.MoveSourceY {
 			output.writtenToYRegister = true
 			output.newYRegister = modifiedData
 		}
-	case instruction.MoveDestinationEXEC:
+	case instr.MoveDestinationEXEC:
 		output.newEXECdInstruction = true
 		output.execdInstruction = uint16(modifiedData)
-	case instruction.MoveDestinationPC:
+	case instr.MoveDestinationPC:
 		output.jumped = true
 		output.newProgramCounter = uint8(modifiedData % 32)
-	case instruction.MoveDestinationISR:
+	case instr.MoveDestinationISR:
 		output.writtenToInputShiftRegister = true
 		output.newInputShiftRegister = modifiedData
 		output.newInputShiftRegisterCounter = 0
-	case instruction.MoveDestinationOSR:
+	case instr.MoveDestinationOSR:
 		output.writtenToOutputShiftRegister = true
 		output.newOutputShiftRegister = modifiedData
 		output.newOutputShiftRegisterCounter = 0

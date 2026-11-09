@@ -50,8 +50,8 @@ func main() {
 	sm0.SetEnabled(true)
 
 	p, _ := r.Pad(3)
-	p.SetInputDelayCycles(inputOutputDelayCycles)
-	p.SetOutputDelayCycles(inputOutputDelayCycles)
+	_ = p.SetInputDelayCycles(inputOutputDelayCycles)
+	_ = p.SetOutputDelayCycles(inputOutputDelayCycles)
 	n := simulation.NewNet("pin 3")
 	_ = n.Connect(p)
 	_ = s.AddNet(n)

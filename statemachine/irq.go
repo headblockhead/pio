@@ -3,7 +3,7 @@ package statemachine
 import (
 	"errors"
 
-	"git.edwardh.dev/pio/instruction"
+	"git.edwardh.dev/pio/instr"
 )
 
 type irqInput struct {
@@ -31,24 +31,24 @@ func getIRQIndex(index uint8, stateMachineIndex uint8) uint8 {
 
 var ErrCannotBothClearAndWaitOnAnIRQ = errors.New("cannot both clear and wait on an IRQ")
 
-func executeIRQ(instr instruction.IRQ, input irqInput) (irqOutput, error) {
+func executeIRQ(i instr.IRQ, input irqInput) (irqOutput, error) {
 	var output irqOutput
 
-	irq := getIRQIndex(instr.Index(), input.stateMachineIndex)
+	irq := getIRQIndex(i.Index(), input.stateMachineIndex)
 
 	if input.alreadyStalled {
 		output.shouldStall = ((input.irqInputs >> irq) & 0b1) == 1
 		return output, nil
 	}
 
-	if instr.Clear() {
-		if instr.Wait() {
+	if i.Clear() {
+		if i.Wait() {
 			return output, ErrCannotBothClearAndWaitOnAnIRQ
 		}
 		output.clearIRQsMask = 0b1 << irq
 	} else {
 		output.setIRQsMask = 0b1 << irq
-		if instr.Wait() {
+		if i.Wait() {
 			output.shouldStall = true
 		}
 	}

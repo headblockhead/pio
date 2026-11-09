@@ -1,4 +1,4 @@
-package instruction
+package instr
 
 type Delay struct {
 	cycles uint8

@@ -1,4 +1,4 @@
-package instruction
+package instr
 
 const TypePushPull Type = 0b100
 
@@ -29,7 +29,7 @@ func DecodePushPull(instr uint16) PushPull {
 }
 
 func (p PushPull) Encode() uint16 {
-	var encoded uint16 = uint16(TypePushPull) << 13
+	var encoded = uint16(TypePushPull) << 13
 	if p.isPull {
 		encoded |= 0b1 << 7
 	}

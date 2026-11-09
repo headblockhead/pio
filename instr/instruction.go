@@ -1,4 +1,4 @@
-package instruction
+package instr
 
 type Type uint8
 

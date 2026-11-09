@@ -1,4 +1,4 @@
-package instruction
+package instr
 
 const TypeSet Type = 0b111
 
