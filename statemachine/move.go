@@ -10,15 +10,15 @@ import (
 
 type moveInput struct {
 	autopullEnabled              bool
-	baseInPin                    uint8
-	baseOutPin                   uint8
+	baseInPin                    uint
+	baseOutPin                   uint
 	inputShiftRegister           uint32
-	outWriteEnableBitIndex       uint8
+	outWriteEnableBitIndex       uint
 	outWriteEnableUsed           bool
 	outputShiftRegister          uint32
-	pinCountOut                  uint8
+	pinCountOut                  uint
 	pinInputs                    uint32
-	statusValueComparisonLevel   uint8
+	statusValueComparisonLevel   uint
 	statusValueUsesRXFIFO        bool
 	stickyOutSetAssertionEnabled bool
 	xRegister                    uint32
@@ -35,15 +35,15 @@ type moveOutput struct {
 	execdInstruction    uint16
 
 	jumped            bool
-	newProgramCounter uint8
+	newProgramCounter uint
 
 	writtenToInputShiftRegister  bool
 	newInputShiftRegister        uint32
-	newInputShiftRegisterCounter uint8
+	newInputShiftRegisterCounter uint
 
 	writtenToOutputShiftRegister  bool
 	newOutputShiftRegister        uint32
-	newOutputShiftRegisterCounter uint8
+	newOutputShiftRegisterCounter uint
 
 	newPinOutputEnables     uint32
 	newPinOutputEnablesMask uint32
@@ -86,7 +86,7 @@ func executeMove(i instr.Move, input moveInput) (moveOutput, error) {
 		} else {
 			fifoLevel = input.fifoTX.Level()
 		}
-		if uint8(fifoLevel) < input.statusValueComparisonLevel {
+		if uint(fifoLevel) < input.statusValueComparisonLevel {
 			sourceData = 0xFFFFFFFF
 		} else {
 			sourceData = 0x00000000
@@ -147,7 +147,7 @@ func executeMove(i instr.Move, input moveInput) (moveOutput, error) {
 		output.execdInstruction = uint16(modifiedData)
 	case instr.MoveDestinationPC:
 		output.jumped = true
-		output.newProgramCounter = uint8(modifiedData % 32)
+		output.newProgramCounter = uint(modifiedData % 32)
 	case instr.MoveDestinationISR:
 		output.writtenToInputShiftRegister = true
 		output.newInputShiftRegister = modifiedData

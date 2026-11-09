@@ -9,7 +9,7 @@ import (
 type irqInput struct {
 	alreadyStalled    bool
 	irqInputs         uint8
-	stateMachineIndex uint8
+	stateMachineIndex uint
 }
 
 type irqOutput struct {
@@ -18,7 +18,7 @@ type irqOutput struct {
 	shouldStall   bool
 }
 
-func getIRQIndex(index uint8, stateMachineIndex uint8) uint8 {
+func getIRQIndex(index uint, stateMachineIndex uint) uint {
 	relative := (index>>4)&0b1 == 1
 	irq := index & 0b111
 	if relative {

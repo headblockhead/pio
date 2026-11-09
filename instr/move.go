@@ -2,9 +2,9 @@ package instr
 
 const TypeMove Type = 0b101
 
-type MoveDestination uint8
-type MoveOperation uint8
-type MoveSource uint8
+type MoveDestination uint
+type MoveOperation uint
+type MoveSource uint
 
 const (
 	MoveDestinationPins MoveDestination = 0b000

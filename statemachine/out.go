@@ -11,14 +11,14 @@ import (
 
 type outInput struct {
 	autopullEnabled              bool
-	baseOutPin                   uint8
+	baseOutPin                   uint
 	outShiftMovesRight           bool
-	outWriteEnableBitIndex       uint8
+	outWriteEnableBitIndex       uint
 	outWriteEnableUsed           bool
 	outputShiftRegister          uint32
-	outputShiftRegisterCounter   uint8
-	pinCountOut                  uint8
-	pullThreshold                uint8
+	outputShiftRegisterCounter   uint
+	pinCountOut                  uint
+	pullThreshold                uint
 	stickyOutSetAssertionEnabled bool
 
 	fifoTX fifo.Reader
@@ -29,14 +29,14 @@ type outOutput struct {
 	execdInstruction    uint16
 
 	jumped            bool
-	newProgramCounter uint8
+	newProgramCounter uint
 
 	writtenToInputShiftRegister  bool
 	newInputShiftRegister        uint32
-	newInputShiftRegisterCounter uint8
+	newInputShiftRegisterCounter uint
 
 	newOutputShiftRegister        uint32
-	newOutputShiftRegisterCounter uint8
+	newOutputShiftRegisterCounter uint
 
 	newPinOutputEnables     uint32
 	newPinOutputEnablesMask uint32
@@ -123,7 +123,7 @@ func executeOut(i instr.Out, input outInput) (outOutput, error) {
 		}
 	case instr.OutDestinationProgramCounter:
 		output.jumped = true
-		output.newProgramCounter = uint8(data % 32)
+		output.newProgramCounter = uint(data % 32)
 	case instr.OutDestinationInputShiftRegister:
 		output.writtenToInputShiftRegister = true
 		output.newInputShiftRegister = data

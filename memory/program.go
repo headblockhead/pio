@@ -3,7 +3,7 @@ package memory
 type Program struct {
 	instructions []uint16
 	hasOrigin    bool
-	origin       uint8
+	origin       uint
 }
 
 func NewProgram(instructions []uint16) *Program {
@@ -14,7 +14,7 @@ func NewProgram(instructions []uint16) *Program {
 	}
 }
 
-func NewProgramWithOrigin(instructions []uint16, origin uint8) *Program {
+func NewProgramWithOrigin(instructions []uint16, origin uint) *Program {
 	return &Program{
 		instructions: instructions,
 		hasOrigin:    true,
@@ -30,6 +30,6 @@ func (p *Program) HasOrigin() bool {
 	return p.hasOrigin
 }
 
-func (p *Program) Origin() uint8 {
+func (p *Program) Origin() uint {
 	return p.origin
 }

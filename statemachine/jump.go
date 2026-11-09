@@ -7,10 +7,10 @@ import (
 )
 
 type jumpInput struct {
-	jumpPin                    uint8
-	outputShiftRegisterCounter uint8
+	jumpPin                    uint
+	outputShiftRegisterCounter uint
 	pinInputs                  uint32
-	pullThreshold              uint8
+	pullThreshold              uint
 	xRegister                  uint32
 	xRegisterInitialized       bool
 	yRegister                  uint32
@@ -21,7 +21,7 @@ type jumpOutput struct {
 	decrementXRegister bool
 	decrementYRegister bool
 	jumped             bool
-	newProgramCounter  uint8
+	newProgramCounter  uint
 }
 
 var ErrJumpConditionInvalid = errors.New("jump condition invalid")

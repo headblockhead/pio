@@ -2,7 +2,7 @@ package instr
 
 const TypeOut Type = 0b011
 
-type OutDestination uint8
+type OutDestination uint
 
 const (
 	OutDestinationPins               OutDestination = 0b000
@@ -17,10 +17,10 @@ const (
 
 type Out struct {
 	destination OutDestination
-	bitCount    uint8
+	bitCount    uint
 }
 
-func NewOut(destination OutDestination, bitCount uint8) Out {
+func NewOut(destination OutDestination, bitCount uint) Out {
 	return Out{
 		destination: destination & 0b111,
 		bitCount:    bitCount & 0b11111,
@@ -28,7 +28,7 @@ func NewOut(destination OutDestination, bitCount uint8) Out {
 }
 
 func (o Out) Destination() OutDestination { return o.destination }
-func (o Out) BitCount() uint8 {
+func (o Out) BitCount() uint {
 	if o.bitCount == 0 {
 		return 32
 	}
@@ -38,7 +38,7 @@ func (o Out) BitCount() uint8 {
 func DecodeOut(instr uint16) Out {
 	return Out{
 		destination: OutDestination((instr >> 5) & 0b111),
-		bitCount:    uint8(instr & 0b11111),
+		bitCount:    uint(instr & 0b11111),
 	}
 }
 

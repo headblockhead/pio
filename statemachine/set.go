@@ -8,8 +8,8 @@ import (
 )
 
 type setInput struct {
-	baseSetPin  uint8
-	pinCountSet uint8
+	baseSetPin  uint
+	pinCountSet uint
 }
 
 type setOutput struct {

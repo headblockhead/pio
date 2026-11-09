@@ -2,7 +2,7 @@ package instr
 
 const TypeJump Type = 0b000
 
-type JumpCondition uint8
+type JumpCondition uint
 
 const (
 	JumpAlways                JumpCondition = 0b000
@@ -17,10 +17,10 @@ const (
 
 type Jump struct {
 	condition JumpCondition
-	address   uint8
+	address   uint
 }
 
-func NewJump(condition JumpCondition, address uint8) Jump {
+func NewJump(condition JumpCondition, address uint) Jump {
 	return Jump{
 		condition: condition & 0b111,
 		address:   address & 0b11111,
@@ -28,12 +28,12 @@ func NewJump(condition JumpCondition, address uint8) Jump {
 }
 
 func (j Jump) Condition() JumpCondition { return j.condition }
-func (j Jump) Address() uint8           { return j.address }
+func (j Jump) Address() uint            { return j.address }
 
 func DecodeJump(instr uint16) Jump {
 	return Jump{
 		condition: JumpCondition((instr >> 5) & 0b111),
-		address:   uint8(instr & 0b11111),
+		address:   uint(instr & 0b11111),
 	}
 }
 

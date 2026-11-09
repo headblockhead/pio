@@ -2,7 +2,7 @@ package instr
 
 const TypeSet Type = 0b111
 
-type SetDestination uint8
+type SetDestination uint
 
 const (
 	SetDestinationPins          SetDestination = 0b000
@@ -13,10 +13,10 @@ const (
 
 type Set struct {
 	destination SetDestination
-	data        uint8
+	data        uint
 }
 
-func NewSet(destination SetDestination, data uint8) Set {
+func NewSet(destination SetDestination, data uint) Set {
 	return Set{
 		destination: destination & 0b111,
 		data:        data & 0b11111,
@@ -24,12 +24,12 @@ func NewSet(destination SetDestination, data uint8) Set {
 }
 
 func (s Set) Destination() SetDestination { return s.destination }
-func (s Set) Data() uint8                 { return s.data }
+func (s Set) Data() uint                  { return s.data }
 
 func DecodeSet(instruction uint16) Set {
 	return Set{
 		destination: SetDestination((instruction >> 5) & 0b111),
-		data:        uint8(instruction & 0b11111),
+		data:        uint(instruction & 0b11111),
 	}
 }
 

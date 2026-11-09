@@ -12,7 +12,7 @@ import (
 
 type Observer interface {
 	MemoryObserver() memory.Observer
-	StateMachineObserver(uint8) (statemachine.Observer, error)
+	StateMachineObserver(uint) (statemachine.Observer, error)
 
 	IRQs() uint8
 	PinInputs() uint32
@@ -24,10 +24,10 @@ type Observer interface {
 type Configurator interface {
 	SetLabel(string)
 	MemoryWriter() memory.Writer
-	StateMachineConfigurator(uint8) (statemachine.Configurator, error)
+	StateMachineConfigurator(uint) (statemachine.Configurator, error)
 
-	SetPinOutput(uint8, bool) error
-	SetPinOutputEnable(uint8, bool) error
+	SetPinOutput(uint, bool) error
+	SetPinOutputEnable(uint, bool) error
 }
 
 type Operator interface {
@@ -70,15 +70,15 @@ func New(label string) *PIOBlock {
 		pinOutputs:       0,
 	}
 
-	for i := range uint8(4) {
+	for i := range uint(4) {
 		p.stateMachines[i] = statemachine.New(i, strconv.Itoa(int(i)), p.memory.Reader())
 	}
 
 	return p
 }
 
-func (p *PIOBlock) StateMachine(i uint8) (*statemachine.StateMachine, error) {
-	if i >= uint8(len(p.stateMachines)) {
+func (p *PIOBlock) StateMachine(i uint) (*statemachine.StateMachine, error) {
+	if i >= uint(len(p.stateMachines)) {
 		return nil, fmt.Errorf("%d: %w", i, ErrOutOfRange)
 	}
 	return p.stateMachines[i], nil
@@ -92,11 +92,11 @@ func (p *PIOBlock) MemoryObserver() memory.Observer { return p.memory.Observer()
 
 var ErrOutOfRange = errors.New("out of range")
 
-func (p *PIOBlock) StateMachineObserver(i uint8) (statemachine.Observer, error) {
+func (p *PIOBlock) StateMachineObserver(i uint) (statemachine.Observer, error) {
 	return p.StateMachine(i)
 }
 
-func (p *PIOBlock) IRQs() uint8              { return p.irqs }
+func (p *PIOBlock) IRQs() uint8            { return p.irqs }
 func (p *PIOBlock) PinInputs() uint32        { return p.pinInputs }
 func (p *PIOBlock) PinOutputEnables() uint32 { return p.pinOutputEnables }
 func (p *PIOBlock) PinOutputs() uint32       { return p.pinOutputs }
@@ -107,11 +107,11 @@ func (p *PIOBlock) Configurator() Configurator {
 
 func (p *PIOBlock) SetLabel(label string)       { p.label = label }
 func (p *PIOBlock) MemoryWriter() memory.Writer { return p.memory.Writer() }
-func (p *PIOBlock) StateMachineConfigurator(i uint8) (statemachine.Configurator, error) {
+func (p *PIOBlock) StateMachineConfigurator(i uint) (statemachine.Configurator, error) {
 	return p.StateMachine(i)
 }
 
-func (p *PIOBlock) SetPinOutput(i uint8, v bool) error {
+func (p *PIOBlock) SetPinOutput(i uint, v bool) error {
 	if i > 31 {
 		return fmt.Errorf("%w: %d, should be < 32", ErrOutOfRange, i)
 	}
@@ -123,7 +123,7 @@ func (p *PIOBlock) SetPinOutput(i uint8, v bool) error {
 	return nil
 }
 
-func (p *PIOBlock) SetPinOutputEnable(i uint8, v bool) error {
+func (p *PIOBlock) SetPinOutputEnable(i uint, v bool) error {
 	if i > 31 {
 		return fmt.Errorf("%w: %d, should be < 32", ErrOutOfRange, i)
 	}

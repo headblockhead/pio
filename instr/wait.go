@@ -2,7 +2,7 @@ package instr
 
 const TypeWait Type = 0b001
 
-type WaitSource uint8
+type WaitSource uint
 
 const (
 	WaitSourceGPIO WaitSource = 0b00
@@ -13,10 +13,10 @@ const (
 type Wait struct {
 	polarity bool
 	source   WaitSource
-	index    uint8
+	index    uint
 }
 
-func NewWait(polarity bool, source WaitSource, index uint8) Wait {
+func NewWait(polarity bool, source WaitSource, index uint) Wait {
 	return Wait{
 		polarity: polarity,
 		source:   source & 0b11,
@@ -26,13 +26,13 @@ func NewWait(polarity bool, source WaitSource, index uint8) Wait {
 
 func (w Wait) Polarity() bool     { return w.polarity }
 func (w Wait) Source() WaitSource { return w.source }
-func (w Wait) Index() uint8       { return w.index }
+func (w Wait) Index() uint        { return w.index }
 
 func DecodeWait(instr uint16) Wait {
 	return Wait{
 		polarity: (instr>>7)&0b1 == 1,
 		source:   WaitSource((instr >> 5) & 0b11),
-		index:    uint8(instr & 0b11111),
+		index:    uint(instr & 0b11111),
 	}
 }
 

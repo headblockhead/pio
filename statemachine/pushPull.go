@@ -10,11 +10,11 @@ import (
 type pushPullInput struct {
 	autopullEnabled            bool
 	inputShiftRegister         uint32
-	inputShiftRegisterCounter  uint8
+	inputShiftRegisterCounter  uint
 	outputShiftRegister        uint32
-	outputShiftRegisterCounter uint8
-	pullThreshold              uint8
-	pushThreshold              uint8
+	outputShiftRegisterCounter uint
+	pullThreshold              uint
+	pushThreshold              uint
 	xRegister                  uint32
 	xRegisterInitialized       bool
 
@@ -24,9 +24,9 @@ type pushPullInput struct {
 
 type pushPullOutput struct {
 	newInputShiftRegister         uint32
-	newInputShiftRegisterCounter  uint8
+	newInputShiftRegisterCounter  uint
 	newOutputShiftRegister        uint32
-	newOutputShiftRegisterCounter uint8
+	newOutputShiftRegisterCounter uint
 	shouldStall                   bool
 }
 

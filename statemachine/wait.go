@@ -7,10 +7,10 @@ import (
 )
 
 type waitInput struct {
-	baseInPin         uint8
+	baseInPin         uint
 	irqInputs         uint8
 	pinInputs         uint32
-	stateMachineIndex uint8
+	stateMachineIndex uint
 }
 
 type waitOutput struct {

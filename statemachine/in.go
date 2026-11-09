@@ -12,13 +12,13 @@ import (
 type inInput struct {
 	alreadyStalled            bool
 	autopushEnabled           bool
-	baseInPin                 uint8
+	baseInPin                 uint
 	inShiftMovesRight         bool
 	inputShiftRegister        uint32
-	inputShiftRegisterCounter uint8
+	inputShiftRegisterCounter uint
 	outputShiftRegister       uint32
 	pinInputs                 uint32
-	pushThreshold             uint8
+	pushThreshold             uint
 	xRegister                 uint32
 	xRegisterInitialized      bool
 	yRegister                 uint32
@@ -29,7 +29,7 @@ type inInput struct {
 
 type inOutput struct {
 	newInputShiftRegister        uint32
-	newInputShiftRegisterCounter uint8
+	newInputShiftRegisterCounter uint
 	shouldStall                  bool
 }
 
