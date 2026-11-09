@@ -38,6 +38,7 @@ type outOutput struct {
 	newOutputShiftRegister        uint32
 	newOutputShiftRegisterCounter uint
 
+	clearSticky bool
 	newPinOutputEnables     uint32
 	newPinOutputEnablesMask uint32
 	newPinOutputs           uint32
@@ -92,10 +93,7 @@ func executeOut(i instr.Out, input outInput) (outOutput, error) {
 	if isPinOperation && input.outWriteEnableUsed && !outWriteEnable {
 		writePins = false
 		if input.stickyOutSetAssertionEnabled {
-			output.newPinOutputEnables = 0
-			output.newPinOutputEnablesMask = 0
-			output.newPinOutputs = 0
-			output.newPinOutputsMask = 0
+			output.clearSticky = true
 		}
 	}
 

@@ -491,14 +491,14 @@ func (sm *StateMachine) SetStatusValueComparisonLevel(statusValueComparisonLevel
 }
 func (sm *StateMachine) SetPullThreshold(pullThreshold uint) error {
 	if pullThreshold > 32 || pullThreshold < 1 {
-		return fmt.Errorf("%w: %d, should be >0 and <32", ErrValueOutOfRange, pullThreshold)
+		return fmt.Errorf("%w: %d, should be > 0 and < 33", ErrValueOutOfRange, pullThreshold)
 	}
 	sm.pullThreshold = pullThreshold
 	return nil
 }
 func (sm *StateMachine) SetPushThreshold(pushThreshold uint) error {
 	if pushThreshold > 32 || pushThreshold < 1 {
-		return fmt.Errorf("%w: %d, should be >0 and <32", ErrValueOutOfRange, pushThreshold)
+		return fmt.Errorf("%w: %d, should be > 0 and < 33", ErrValueOutOfRange, pushThreshold)
 	}
 	sm.pushThreshold = pushThreshold
 	return nil
@@ -919,6 +919,12 @@ func (sm *StateMachine) execute(instruction uint16, currentlyStalled bool) (jump
 			sm.pinOutputs &= ^output.newPinOutputsMask
 			sm.pinOutputs |= output.newPinOutputs
 			sm.pinOutputsMask |= output.newPinOutputsMask
+		}
+		if output.clearSticky {
+			sm.pinOutputEnables = 0
+			sm.pinOutputEnablesMask = 0
+			sm.pinOutputs = 0
+			sm.pinOutputsMask = 0
 		}
 		if output.writtenToXRegister {
 			sm.xRegister = output.newXRegister
