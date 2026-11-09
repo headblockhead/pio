@@ -30,6 +30,8 @@ type pushPullOutput struct {
 	shouldStall                   bool
 }
 
+var ErrPushNoblockOnFullFIFO = fmt.Errorf("push noblock instruction on full RX FIFO caused data loss")
+
 func executePushPull(i instr.PushPull, input pushPullInput) (pushPullOutput, error) {
 	var output = pushPullOutput{
 		newInputShiftRegister:         input.inputShiftRegister,
@@ -66,8 +68,7 @@ func executePushPull(i instr.PushPull, input pushPullInput) (pushPullOutput, err
 			output.newInputShiftRegister = 0
 			output.newInputShiftRegisterCounter = 0
 		} else if shouldPush && !i.Block() {
-			output.newInputShiftRegister = 0
-			output.newInputShiftRegisterCounter = 0
+			return output, ErrPushNoblockOnFullFIFO
 		}
 	}
 	return output, nil
