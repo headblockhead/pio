@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"math/rand/v2"
 	"time"
 
@@ -105,6 +106,8 @@ func main() {
 	bSM0, _ := bPIO0.StateMachine(0)
 	bRXReader := bSM0.FIFORXReader()
 
+	verifyWords := make(chan uint32, 10)
+
 	// The simulation will be run forever until it is manually stopped.
 	for {
 		// Draw the state to the terminal. (see tui.go)
@@ -112,7 +115,9 @@ func main() {
 
 		// If RP2040 A's TX FIFO is not full, it will be given another word to transmit.
 		if !aTXWriter.IsFull() {
-			_ = aTXWriter.Write(rand.Uint32())
+			nextWord := rand.Uint32()
+			verifyWords <- nextWord
+			_ = aTXWriter.Write(nextWord) // pio_sm_put_blocking
 		}
 
 		// Tick the whole simulation forward one cycle.
@@ -125,8 +130,13 @@ func main() {
 		if !bRXReader.IsEmpty() {
 			// Read the word from RP2040 B's RX FIFO.
 			incomingWord, _ := bRXReader.Read() // pio_sm_get_blocking
-			// The word is discarded here in this example.
-			_ = incomingWord
+			select {
+			case previousTXWord := <-verifyWords:
+				if incomingWord != previousTXWord {
+					err := fmt.Errorf("RP2040 B got 0b%032b (0x%08X), expected 0b%032b (0x%08X)", incomingWord, incomingWord, previousTXWord, previousTXWord)
+					panic(err)
+				}
+			}
 		}
 
 		// Wait 16ms inbetween each tick so the terminal output is visible.
