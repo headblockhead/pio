@@ -7,42 +7,42 @@ import (
 	"git.edwardh.dev/pio/instruction"
 )
 
-type SetInput struct {
-	BaseSetPin  uint8
-	PinCountSet uint8
+type setInput struct {
+	baseSetPin  uint8
+	pinCountSet uint8
 }
 
-type SetOutput struct {
-	NewPinOutputEnables     uint32
-	NewPinOutputEnablesMask uint32
-	NewPinOutputs           uint32
-	NewPinOutputsMask       uint32
-	WrittenToXRegister      bool
-	NewXRegister            uint32
-	WrittenToYRegister      bool
-	NewYRegister            uint32
+type setOutput struct {
+	newPinOutputEnables     uint32
+	newPinOutputEnablesMask uint32
+	newPinOutputs           uint32
+	newPinOutputsMask       uint32
+	writtenToXRegister      bool
+	newXRegister            uint32
+	writtenToYRegister      bool
+	newYRegister            uint32
 }
 
 var ErrSetDestinationInvalid = errors.New("set destination invalid")
 
-func ExecuteSet(instr instruction.Set, input SetInput) (SetOutput, error) {
-	var output SetOutput
+func executeSet(instr instruction.Set, input setInput) (setOutput, error) {
+	var output setOutput
 
-	var pinData = bits.RotateLeft32(uint32(instr.Data()), int(input.BaseSetPin))
-	var pinMask = bits.RotateLeft32((0b1<<input.PinCountSet)-1, int(input.BaseSetPin))
+	var pinData = bits.RotateLeft32(uint32(instr.Data()), int(input.baseSetPin))
+	var pinMask = bits.RotateLeft32((0b1<<input.pinCountSet)-1, int(input.baseSetPin))
 	switch instr.Destination() {
 	case instruction.SetDestinationPins:
-		output.NewPinOutputs = pinData
-		output.NewPinOutputsMask = pinMask
+		output.newPinOutputs = pinData
+		output.newPinOutputsMask = pinMask
 	case instruction.SetDestinationX:
-		output.WrittenToXRegister = true
-		output.NewXRegister = uint32(instr.Data())
+		output.writtenToXRegister = true
+		output.newXRegister = uint32(instr.Data())
 	case instruction.SetDestinationY:
-		output.WrittenToYRegister = true
-		output.NewYRegister = uint32(instr.Data())
+		output.writtenToYRegister = true
+		output.newYRegister = uint32(instr.Data())
 	case instruction.SetDestinationPinDirections:
-		output.NewPinOutputEnables = pinData
-		output.NewPinOutputEnablesMask = pinMask
+		output.newPinOutputEnables = pinData
+		output.newPinOutputEnablesMask = pinMask
 	default:
 		return output, ErrSetDestinationInvalid
 	}

@@ -6,34 +6,34 @@ import (
 	"git.edwardh.dev/pio/instruction"
 )
 
-type WaitInput struct {
-	BaseInPin         uint8
-	IRQInputs         uint8
-	PinInputs         uint32
-	StateMachineIndex uint8
+type waitInput struct {
+	baseInPin         uint8
+	irqInputs         uint8
+	pinInputs         uint32
+	stateMachineIndex uint8
 }
 
-type WaitOutput struct {
-	ClearIRQsMask uint8
-	ShouldStall   bool
+type waitOutput struct {
+	clearIRQsMask uint8
+	shouldStall   bool
 }
 
 var ErrWaitSourceInvalid = errors.New("wait source invalid")
 
-func ExecuteWait(instr instruction.Wait, input WaitInput) (WaitOutput, error) {
-	var output WaitOutput
+func executeWait(instr instruction.Wait, input waitInput) (waitOutput, error) {
+	var output waitOutput
 
 	switch instr.Source() {
 	case instruction.WaitSourceGPIO:
-		output.ShouldStall = ((input.PinInputs>>instr.Index())&0b1 == 1) != instr.Polarity()
+		output.shouldStall = ((input.pinInputs>>instr.Index())&0b1 == 1) != instr.Polarity()
 	case instruction.WaitSourcePin:
-		pin := (input.BaseInPin + instr.Index()) % 32
-		output.ShouldStall = ((input.PinInputs>>pin)&0b1 == 1) != instr.Polarity()
+		pin := (input.baseInPin + instr.Index()) % 32
+		output.shouldStall = ((input.pinInputs>>pin)&0b1 == 1) != instr.Polarity()
 	case instruction.WaitSourceIRQ:
-		irq := GetIRQIndex(instr.Index(), input.StateMachineIndex)
-		output.ShouldStall = ((input.IRQInputs>>irq)&0b1 == 1) != instr.Polarity()
-		if !output.ShouldStall && instr.Polarity() {
-			output.ClearIRQsMask = 0b1 << irq
+		irq := getIRQIndex(instr.Index(), input.stateMachineIndex)
+		output.shouldStall = ((input.irqInputs>>irq)&0b1 == 1) != instr.Polarity()
+		if !output.shouldStall && instr.Polarity() {
+			output.clearIRQsMask = 0b1 << irq
 		}
 	default:
 		return output, ErrWaitSourceInvalid

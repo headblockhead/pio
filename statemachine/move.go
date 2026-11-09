@@ -8,51 +8,51 @@ import (
 	"git.edwardh.dev/pio/instruction"
 )
 
-type MoveInput struct {
-	AutopullEnabled              bool
-	BaseInPin                    uint8
-	BaseOutPin                   uint8
-	InputShiftRegister           uint32
-	OutWriteEnableBitIndex       uint8
-	OutWriteEnableUsed           bool
-	OutputShiftRegister          uint32
-	PinCountOut                  uint8
-	PinInputs                    uint32
-	StatusValueComparisonLevel   uint8
-	StatusValueUsesRXFIFO        bool
-	StickyOutSetAssertionEnabled bool
-	XRegister                    uint32
-	XRegisterInitialized         bool
-	YRegister                    uint32
-	YRegisterInitialized         bool
+type moveInput struct {
+	autopullEnabled              bool
+	baseInPin                    uint8
+	baseOutPin                   uint8
+	inputShiftRegister           uint32
+	outWriteEnableBitIndex       uint8
+	outWriteEnableUsed           bool
+	outputShiftRegister          uint32
+	pinCountOut                  uint8
+	pinInputs                    uint32
+	statusValueComparisonLevel   uint8
+	statusValueUsesRXFIFO        bool
+	stickyOutSetAssertionEnabled bool
+	xRegister                    uint32
+	xRegisterInitialized         bool
+	yRegister                    uint32
+	yRegisterInitialized         bool
 
-	FIFORX fifo.Writer
-	FIFOTX fifo.Reader
+	fifoRX fifo.Writer
+	fifoTX fifo.Reader
 }
 
-type MoveOutput struct {
-	NewEXECdInstruction bool
-	EXECdInstruction    uint16
+type moveOutput struct {
+	newEXECdInstruction bool
+	execdInstruction    uint16
 
-	Jumped            bool
-	NewProgramCounter uint8
+	jumped            bool
+	newProgramCounter uint8
 
-	WrittenToInputShiftRegister  bool
-	NewInputShiftRegister        uint32
-	NewInputShiftRegisterCounter uint8
+	writtenToInputShiftRegister  bool
+	newInputShiftRegister        uint32
+	newInputShiftRegisterCounter uint8
 
-	WrittenToOutputShiftRegister  bool
-	NewOutputShiftRegister        uint32
-	NewOutputShiftRegisterCounter uint8
+	writtenToOutputShiftRegister  bool
+	newOutputShiftRegister        uint32
+	newOutputShiftRegisterCounter uint8
 
-	NewPinOutputEnables     uint32
-	NewPinOutputEnablesMask uint32
-	NewPinOutputs           uint32
-	NewPinOutputsMask       uint32
-	WrittenToXRegister      bool
-	NewXRegister            uint32
-	WrittenToYRegister      bool
-	NewYRegister            uint32
+	newPinOutputEnables     uint32
+	newPinOutputEnablesMask uint32
+	newPinOutputs           uint32
+	newPinOutputsMask       uint32
+	writtenToXRegister      bool
+	newXRegister            uint32
+	writtenToYRegister      bool
+	newYRegister            uint32
 }
 
 var ErrMoveSourceInvalid = errors.New("move source invalid")
@@ -60,44 +60,44 @@ var ErrCannotMoveFromOSRWhileAutopullEnabled = errors.New("cannot move from OSR 
 var ErrMoveOperationInvalid = errors.New("move operation invalid")
 var ErrMoveDestinationInvalid = errors.New("move destination invalid")
 
-func ExecuteMove(instr instruction.Move, input MoveInput) (MoveOutput, error) {
-	var output MoveOutput
+func executeMove(instr instruction.Move, input moveInput) (moveOutput, error) {
+	var output moveOutput
 
 	var sourceData uint32
 	switch instr.Source() {
 	case instruction.MoveSourcePins:
-		sourceData = bits.RotateLeft32(input.PinInputs, -int(input.BaseInPin))
+		sourceData = bits.RotateLeft32(input.pinInputs, -int(input.baseInPin))
 	case instruction.MoveSourceX:
-		if !input.XRegisterInitialized && instr.Destination() != instruction.MoveDestinationX {
+		if !input.xRegisterInitialized && instr.Destination() != instruction.MoveDestinationX {
 			return output, ErrXRegisterNotInitialized
 		}
-		sourceData = input.XRegister
+		sourceData = input.xRegister
 	case instruction.MoveSourceY:
-		if !input.YRegisterInitialized && instr.Destination() != instruction.MoveDestinationY {
+		if !input.yRegisterInitialized && instr.Destination() != instruction.MoveDestinationY {
 			return output, ErrYRegisterNotInitialized
 		}
-		sourceData = input.YRegister
+		sourceData = input.yRegister
 	case instruction.MoveSourceNull:
 		sourceData = 0
 	case instruction.MoveSourceStatus:
 		var fifoLevel uint
-		if input.StatusValueUsesRXFIFO {
-			fifoLevel = input.FIFORX.Level()
+		if input.statusValueUsesRXFIFO {
+			fifoLevel = input.fifoRX.Level()
 		} else {
-			fifoLevel = input.FIFOTX.Level()
+			fifoLevel = input.fifoTX.Level()
 		}
-		if uint8(fifoLevel) < input.StatusValueComparisonLevel {
+		if uint8(fifoLevel) < input.statusValueComparisonLevel {
 			sourceData = 0xFFFFFFFF
 		} else {
 			sourceData = 0x00000000
 		}
 	case instruction.MoveSourceISR:
-		sourceData = input.InputShiftRegister
+		sourceData = input.inputShiftRegister
 	case instruction.MoveSourceOSR:
-		if input.AutopullEnabled {
+		if input.autopullEnabled {
 			return output, ErrCannotMoveFromOSRWhileAutopullEnabled
 		} else {
-			sourceData = input.OutputShiftRegister
+			sourceData = input.outputShiftRegister
 		}
 	default:
 		return output, ErrMoveSourceInvalid
@@ -117,45 +117,45 @@ func ExecuteMove(instr instruction.Move, input MoveInput) (MoveOutput, error) {
 
 	switch instr.Destination() {
 	case instruction.MoveDestinationPins:
-		outWriteEnable := ((modifiedData >> input.OutWriteEnableBitIndex) & 0b1) == 1
+		outWriteEnable := ((modifiedData >> input.outWriteEnableBitIndex) & 0b1) == 1
 		writePins := true
-		if input.OutWriteEnableUsed && !outWriteEnable {
+		if input.outWriteEnableUsed && !outWriteEnable {
 			writePins = false
-			if input.StickyOutSetAssertionEnabled {
-				output.NewPinOutputEnables = 0
-				output.NewPinOutputEnablesMask = 0
-				output.NewPinOutputs = 0
-				output.NewPinOutputsMask = 0
+			if input.stickyOutSetAssertionEnabled {
+				output.newPinOutputEnables = 0
+				output.newPinOutputEnablesMask = 0
+				output.newPinOutputs = 0
+				output.newPinOutputsMask = 0
 			}
 		}
 		if writePins {
-			output.NewPinOutputsMask = bits.RotateLeft32((0b1<<input.PinCountOut)-1, int(input.BaseOutPin))
-			output.NewPinOutputs = bits.RotateLeft32(modifiedData, int(input.BaseOutPin))
+			output.newPinOutputsMask = bits.RotateLeft32((0b1<<input.pinCountOut)-1, int(input.baseOutPin))
+			output.newPinOutputs = bits.RotateLeft32(modifiedData, int(input.baseOutPin))
 		}
 	case instruction.MoveDestinationX:
 		if instr.Source() != instruction.MoveSourceX {
-			output.WrittenToXRegister = true
-			output.NewXRegister = modifiedData
+			output.writtenToXRegister = true
+			output.newXRegister = modifiedData
 		}
 	case instruction.MoveDestinationY:
 		if instr.Source() != instruction.MoveSourceY {
-			output.WrittenToYRegister = true
-			output.NewYRegister = modifiedData
+			output.writtenToYRegister = true
+			output.newYRegister = modifiedData
 		}
 	case instruction.MoveDestinationEXEC:
-		output.NewEXECdInstruction = true
-		output.EXECdInstruction = uint16(modifiedData)
+		output.newEXECdInstruction = true
+		output.execdInstruction = uint16(modifiedData)
 	case instruction.MoveDestinationPC:
-		output.Jumped = true
-		output.NewProgramCounter = uint8(modifiedData % 32)
+		output.jumped = true
+		output.newProgramCounter = uint8(modifiedData % 32)
 	case instruction.MoveDestinationISR:
-		output.WrittenToInputShiftRegister = true
-		output.NewInputShiftRegister = modifiedData
-		output.NewInputShiftRegisterCounter = 0
+		output.writtenToInputShiftRegister = true
+		output.newInputShiftRegister = modifiedData
+		output.newInputShiftRegisterCounter = 0
 	case instruction.MoveDestinationOSR:
-		output.WrittenToOutputShiftRegister = true
-		output.NewOutputShiftRegister = modifiedData
-		output.NewOutputShiftRegisterCounter = 0
+		output.writtenToOutputShiftRegister = true
+		output.newOutputShiftRegister = modifiedData
+		output.newOutputShiftRegisterCounter = 0
 	default:
 		return output, ErrMoveDestinationInvalid
 	}

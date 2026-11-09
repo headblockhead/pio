@@ -9,128 +9,128 @@ import (
 	"git.edwardh.dev/pio/instruction"
 )
 
-type OutInput struct {
-	AutopullEnabled              bool
-	BaseOutPin                   uint8
-	OutShiftMovesRight           bool
-	OutWriteEnableBitIndex       uint8
-	OutWriteEnableUsed           bool
-	OutputShiftRegister          uint32
-	OutputShiftRegisterCounter   uint8
-	PinCountOut                  uint8
-	PullThreshold                uint8
-	StickyOutSetAssertionEnabled bool
+type outInput struct {
+	autopullEnabled              bool
+	baseOutPin                   uint8
+	outShiftMovesRight           bool
+	outWriteEnableBitIndex       uint8
+	outWriteEnableUsed           bool
+	outputShiftRegister          uint32
+	outputShiftRegisterCounter   uint8
+	pinCountOut                  uint8
+	pullThreshold                uint8
+	stickyOutSetAssertionEnabled bool
 
-	FIFOTX fifo.Reader
+	fifoTX fifo.Reader
 }
 
-type OutOutput struct {
-	NewEXECdInstruction bool
-	EXECdInstruction    uint16
+type outOutput struct {
+	newEXECdInstruction bool
+	execdInstruction    uint16
 
-	Jumped            bool
-	NewProgramCounter uint8
+	jumped            bool
+	newProgramCounter uint8
 
-	WrittenToInputShiftRegister  bool
-	NewInputShiftRegister        uint32
-	NewInputShiftRegisterCounter uint8
+	writtenToInputShiftRegister  bool
+	newInputShiftRegister        uint32
+	newInputShiftRegisterCounter uint8
 
-	NewOutputShiftRegister        uint32
-	NewOutputShiftRegisterCounter uint8
+	newOutputShiftRegister        uint32
+	newOutputShiftRegisterCounter uint8
 
-	NewPinOutputEnables     uint32
-	NewPinOutputEnablesMask uint32
-	NewPinOutputs           uint32
-	NewPinOutputsMask       uint32
-	WrittenToXRegister      bool
-	NewXRegister            uint32
-	WrittenToYRegister      bool
-	NewYRegister            uint32
-	ShouldStall             bool
+	newPinOutputEnables     uint32
+	newPinOutputEnablesMask uint32
+	newPinOutputs           uint32
+	newPinOutputsMask       uint32
+	writtenToXRegister      bool
+	newXRegister            uint32
+	writtenToYRegister      bool
+	newYRegister            uint32
+	shouldStall             bool
 }
 
 var ErrOutDestinationInvalid = errors.New("out destination invalid")
 
-func ExecuteOut(instr instruction.Out, input OutInput) (OutOutput, error) {
-	var output OutOutput = OutOutput{
-		NewOutputShiftRegister:        input.OutputShiftRegister,
-		NewOutputShiftRegisterCounter: input.OutputShiftRegisterCounter,
+func executeOut(instr instruction.Out, input outInput) (outOutput, error) {
+	var output outOutput = outOutput{
+		newOutputShiftRegister:        input.outputShiftRegister,
+		newOutputShiftRegisterCounter: input.outputShiftRegisterCounter,
 	}
 
-	shouldPull := input.AutopullEnabled && (input.OutputShiftRegisterCounter >= input.PullThreshold)
+	shouldPull := input.autopullEnabled && (input.outputShiftRegisterCounter >= input.pullThreshold)
 	if shouldPull {
-		output.ShouldStall = true
-		if !input.FIFOTX.IsEmpty() {
-			osr, err := input.FIFOTX.Read()
+		output.shouldStall = true
+		if !input.fifoTX.IsEmpty() {
+			osr, err := input.fifoTX.Read()
 			if err != nil {
 				return output, fmt.Errorf("error reading TX fifo for autopull: %w", err)
 			}
-			output.NewOutputShiftRegister = osr
-			output.NewOutputShiftRegisterCounter = 0
+			output.newOutputShiftRegister = osr
+			output.newOutputShiftRegisterCounter = 0
 		}
 		return output, nil
 	}
 
 	var data uint32
 	var mask uint32 = (0b1 << instr.BitCount()) - 1
-	if input.OutShiftMovesRight {
-		data = input.OutputShiftRegister & mask
-		output.NewOutputShiftRegister >>= instr.BitCount()
+	if input.outShiftMovesRight {
+		data = input.outputShiftRegister & mask
+		output.newOutputShiftRegister >>= instr.BitCount()
 	} else {
-		data = (input.OutputShiftRegister >> (32 - instr.BitCount()))
-		output.NewOutputShiftRegister <<= instr.BitCount()
+		data = (input.outputShiftRegister >> (32 - instr.BitCount()))
+		output.newOutputShiftRegister <<= instr.BitCount()
 	}
-	output.NewOutputShiftRegisterCounter += instr.BitCount()
-	if output.NewOutputShiftRegisterCounter > 32 {
-		output.NewOutputShiftRegisterCounter = 32
+	output.newOutputShiftRegisterCounter += instr.BitCount()
+	if output.newOutputShiftRegisterCounter > 32 {
+		output.newOutputShiftRegisterCounter = 32
 	}
 
 	isPinOperation := instr.Destination() == instruction.OutDestinationPins || instr.Destination() == instruction.OutDestinationPinDirections
 
-	outWriteEnable := ((data >> input.OutWriteEnableBitIndex) & 0b1) == 1
+	outWriteEnable := ((data >> input.outWriteEnableBitIndex) & 0b1) == 1
 	writePins := true
-	if isPinOperation && input.OutWriteEnableUsed && !outWriteEnable {
+	if isPinOperation && input.outWriteEnableUsed && !outWriteEnable {
 		writePins = false
-		if input.StickyOutSetAssertionEnabled {
-			output.NewPinOutputEnables = 0
-			output.NewPinOutputEnablesMask = 0
-			output.NewPinOutputs = 0
-			output.NewPinOutputsMask = 0
+		if input.stickyOutSetAssertionEnabled {
+			output.newPinOutputEnables = 0
+			output.newPinOutputEnablesMask = 0
+			output.newPinOutputs = 0
+			output.newPinOutputsMask = 0
 		}
 	}
 
-	var pinData = bits.RotateLeft32(data, int(input.BaseOutPin))
-	var pinMask = bits.RotateLeft32((0b1<<input.PinCountOut)-1, int(input.BaseOutPin))
+	var pinData = bits.RotateLeft32(data, int(input.baseOutPin))
+	var pinMask = bits.RotateLeft32((0b1<<input.pinCountOut)-1, int(input.baseOutPin))
 
 	switch instr.Destination() {
 	case instruction.OutDestinationPins:
 		if writePins {
-			output.NewPinOutputs = pinData
-			output.NewPinOutputsMask = pinMask
+			output.newPinOutputs = pinData
+			output.newPinOutputsMask = pinMask
 		}
 	case instruction.OutDestinationX:
-		output.NewXRegister = data
-		output.WrittenToXRegister = true
+		output.newXRegister = data
+		output.writtenToXRegister = true
 	case instruction.OutDestinationY:
-		output.NewYRegister = data
-		output.WrittenToYRegister = true
+		output.newYRegister = data
+		output.writtenToYRegister = true
 	case instruction.OutDestinationNull:
 		// discards data
 	case instruction.OutDestinationPinDirections:
 		if writePins {
-			output.NewPinOutputEnables = pinData
-			output.NewPinOutputEnablesMask = pinMask
+			output.newPinOutputEnables = pinData
+			output.newPinOutputEnablesMask = pinMask
 		}
 	case instruction.OutDestinationProgramCounter:
-		output.Jumped = true
-		output.NewProgramCounter = uint8(data % 32)
+		output.jumped = true
+		output.newProgramCounter = uint8(data % 32)
 	case instruction.OutDestinationInputShiftRegister:
-		output.WrittenToInputShiftRegister = true
-		output.NewInputShiftRegister = data
-		output.NewInputShiftRegisterCounter = instr.BitCount()
+		output.writtenToInputShiftRegister = true
+		output.newInputShiftRegister = data
+		output.newInputShiftRegisterCounter = instr.BitCount()
 	case instruction.OutDestinationEXEC:
-		output.NewEXECdInstruction = true
-		output.EXECdInstruction = uint16(data)
+		output.newEXECdInstruction = true
+		output.execdInstruction = uint16(data)
 	default:
 		return output, ErrOutDestinationInvalid
 	}

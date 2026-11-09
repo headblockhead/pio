@@ -7,64 +7,64 @@ import (
 	"git.edwardh.dev/pio/instruction"
 )
 
-type PushPullInput struct {
-	AutopullEnabled            bool
-	InputShiftRegister         uint32
-	InputShiftRegisterCounter  uint8
-	OutputShiftRegister        uint32
-	OutputShiftRegisterCounter uint8
-	PullThreshold              uint8
-	PushThreshold              uint8
-	XRegister                  uint32
-	XRegisterInitialized       bool
+type pushPullInput struct {
+	autopullEnabled            bool
+	inputShiftRegister         uint32
+	inputShiftRegisterCounter  uint8
+	outputShiftRegister        uint32
+	outputShiftRegisterCounter uint8
+	pullThreshold              uint8
+	pushThreshold              uint8
+	xRegister                  uint32
+	xRegisterInitialized       bool
 
-	FIFOTX fifo.Reader
-	FIFORX fifo.Writer
+	fifoTX fifo.Reader
+	fifoRX fifo.Writer
 }
 
-type PushPullOutput struct {
-	NewInputShiftRegister         uint32
-	NewInputShiftRegisterCounter  uint8
-	NewOutputShiftRegister        uint32
-	NewOutputShiftRegisterCounter uint8
-	ShouldStall                   bool
+type pushPullOutput struct {
+	newInputShiftRegister         uint32
+	newInputShiftRegisterCounter  uint8
+	newOutputShiftRegister        uint32
+	newOutputShiftRegisterCounter uint8
+	shouldStall                   bool
 }
 
-func ExecutePushPull(instr instruction.PushPull, input PushPullInput) (PushPullOutput, error) {
-	var output PushPullOutput = PushPullOutput{
-		NewInputShiftRegister:         input.InputShiftRegister,
-		NewInputShiftRegisterCounter:  input.InputShiftRegisterCounter,
-		NewOutputShiftRegister:        input.OutputShiftRegister,
-		NewOutputShiftRegisterCounter: input.OutputShiftRegisterCounter,
+func executePushPull(instr instruction.PushPull, input pushPullInput) (pushPullOutput, error) {
+	var output pushPullOutput = pushPullOutput{
+		newInputShiftRegister:         input.inputShiftRegister,
+		newInputShiftRegisterCounter:  input.inputShiftRegisterCounter,
+		newOutputShiftRegister:        input.outputShiftRegister,
+		newOutputShiftRegisterCounter: input.outputShiftRegisterCounter,
 	}
 
 	if instr.IsPull() {
-		shouldPull := (!instr.IfThreshold() && !input.AutopullEnabled) || (input.OutputShiftRegisterCounter >= input.PullThreshold)
-		output.ShouldStall = instr.Block() && shouldPull && input.FIFOTX.IsEmpty()
-		if shouldPull && !input.FIFOTX.IsEmpty() {
-			osr, err := input.FIFOTX.Read()
+		shouldPull := (!instr.IfThreshold() && !input.autopullEnabled) || (input.outputShiftRegisterCounter >= input.pullThreshold)
+		output.shouldStall = instr.Block() && shouldPull && input.fifoTX.IsEmpty()
+		if shouldPull && !input.fifoTX.IsEmpty() {
+			osr, err := input.fifoTX.Read()
 			if err != nil {
 				return output, fmt.Errorf("error reading TX fifo for pull: %w", err)
 			}
-			output.NewOutputShiftRegister = osr
-			output.NewOutputShiftRegisterCounter = 0
+			output.newOutputShiftRegister = osr
+			output.newOutputShiftRegisterCounter = 0
 		} else if shouldPull && !instr.Block() {
-			if !input.XRegisterInitialized {
+			if !input.xRegisterInitialized {
 				return output, ErrXRegisterNotInitialized
 			}
-			output.NewOutputShiftRegister = input.XRegister
-			output.NewOutputShiftRegisterCounter = 0
+			output.newOutputShiftRegister = input.xRegister
+			output.newOutputShiftRegisterCounter = 0
 		}
 	} else {
-		shouldPush := !instr.IfThreshold() || (input.InputShiftRegisterCounter >= input.PushThreshold)
-		output.ShouldStall = instr.Block() && shouldPush && input.FIFORX.IsFull()
-		if shouldPush && !input.FIFORX.IsFull() {
-			err := input.FIFORX.Write(input.InputShiftRegister)
+		shouldPush := !instr.IfThreshold() || (input.inputShiftRegisterCounter >= input.pushThreshold)
+		output.shouldStall = instr.Block() && shouldPush && input.fifoRX.IsFull()
+		if shouldPush && !input.fifoRX.IsFull() {
+			err := input.fifoRX.Write(input.inputShiftRegister)
 			if err != nil {
 				return output, fmt.Errorf("error writing RX FIFO for autopush: %w", err)
 			}
-			output.NewInputShiftRegister = 0
-			output.NewInputShiftRegisterCounter = 0
+			output.newInputShiftRegister = 0
+			output.newInputShiftRegisterCounter = 0
 		}
 	}
 	return output, nil

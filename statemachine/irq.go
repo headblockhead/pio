@@ -6,19 +6,19 @@ import (
 	"git.edwardh.dev/pio/instruction"
 )
 
-type IRQInput struct {
-	AlreadyStalled    bool
-	IRQInputs         uint8
-	StateMachineIndex uint8
+type irqInput struct {
+	alreadyStalled    bool
+	irqInputs         uint8
+	stateMachineIndex uint8
 }
 
-type IRQOutput struct {
-	ClearIRQsMask uint8
-	SetIRQsMask   uint8
-	ShouldStall   bool
+type irqOutput struct {
+	clearIRQsMask uint8
+	setIRQsMask   uint8
+	shouldStall   bool
 }
 
-func GetIRQIndex(index uint8, stateMachineIndex uint8) uint8 {
+func getIRQIndex(index uint8, stateMachineIndex uint8) uint8 {
 	relative := (index>>4)&0b1 == 1
 	irq := index & 0b111
 	if relative {
@@ -31,13 +31,13 @@ func GetIRQIndex(index uint8, stateMachineIndex uint8) uint8 {
 
 var ErrCannotBothClearAndWaitOnAnIRQ = errors.New("cannot both clear and wait on an IRQ")
 
-func ExecuteIRQ(instr instruction.IRQ, input IRQInput) (IRQOutput, error) {
-	var output IRQOutput
+func executeIRQ(instr instruction.IRQ, input irqInput) (irqOutput, error) {
+	var output irqOutput
 
-	irq := GetIRQIndex(instr.Index(), input.StateMachineIndex)
+	irq := getIRQIndex(instr.Index(), input.stateMachineIndex)
 
-	if input.AlreadyStalled {
-		output.ShouldStall = ((input.IRQInputs >> irq) & 0b1) == 1
+	if input.alreadyStalled {
+		output.shouldStall = ((input.irqInputs >> irq) & 0b1) == 1
 		return output, nil
 	}
 
@@ -45,11 +45,11 @@ func ExecuteIRQ(instr instruction.IRQ, input IRQInput) (IRQOutput, error) {
 		if instr.Wait() {
 			return output, ErrCannotBothClearAndWaitOnAnIRQ
 		}
-		output.ClearIRQsMask = 0b1 << irq
+		output.clearIRQsMask = 0b1 << irq
 	} else {
-		output.SetIRQsMask = 0b1 << irq
+		output.setIRQsMask = 0b1 << irq
 		if instr.Wait() {
-			output.ShouldStall = true
+			output.shouldStall = true
 		}
 	}
 

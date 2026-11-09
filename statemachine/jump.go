@@ -6,29 +6,29 @@ import (
 	"git.edwardh.dev/pio/instruction"
 )
 
-type JumpInput struct {
-	JumpPin                    uint8
-	OutputShiftRegisterCounter uint8
-	PinInputs                  uint32
-	PullThreshold              uint8
-	XRegister                  uint32
-	XRegisterInitialized       bool
-	YRegister                  uint32
-	YRegisterInitialized       bool
+type jumpInput struct {
+	jumpPin                    uint8
+	outputShiftRegisterCounter uint8
+	pinInputs                  uint32
+	pullThreshold              uint8
+	xRegister                  uint32
+	xRegisterInitialized       bool
+	yRegister                  uint32
+	yRegisterInitialized       bool
 }
 
-type JumpOutput struct {
-	DecrementXRegister bool
-	DecrementYRegister bool
-	Jumped             bool
-	NewProgramCounter  uint8
+type jumpOutput struct {
+	decrementXRegister bool
+	decrementYRegister bool
+	jumped             bool
+	newProgramCounter  uint8
 }
 
 var ErrJumpConditionInvalid = errors.New("jump condition invalid")
 
-func ExecuteJump(instr instruction.Jump, input JumpInput) (JumpOutput, error) {
+func executeJump(instr instruction.Jump, input jumpInput) (jumpOutput, error) {
 	var shouldJump bool
-	var output JumpOutput
+	var output jumpOutput
 
 	address := instr.Address()
 
@@ -36,46 +36,46 @@ func ExecuteJump(instr instruction.Jump, input JumpInput) (JumpOutput, error) {
 	case instruction.JumpAlways:
 		shouldJump = true
 	case instruction.JumpXZero:
-		if !input.XRegisterInitialized {
+		if !input.xRegisterInitialized {
 			return output, ErrXRegisterNotInitialized
 		}
-		shouldJump = (input.XRegister == 0)
+		shouldJump = (input.xRegister == 0)
 	case instruction.JumpXNonZeroThenDecrement:
-		if !input.XRegisterInitialized {
+		if !input.xRegisterInitialized {
 			return output, ErrXRegisterNotInitialized
 		}
-		shouldJump = (input.XRegister != 0)
-		output.DecrementXRegister = true
+		shouldJump = (input.xRegister != 0)
+		output.decrementXRegister = true
 	case instruction.JumpYZero:
-		if !input.YRegisterInitialized {
+		if !input.yRegisterInitialized {
 			return output, ErrYRegisterNotInitialized
 		}
-		shouldJump = (input.YRegister == 0)
+		shouldJump = (input.yRegister == 0)
 	case instruction.JumpYNonZeroThenDecrement:
-		if !input.YRegisterInitialized {
+		if !input.yRegisterInitialized {
 			return output, ErrYRegisterNotInitialized
 		}
-		shouldJump = (input.YRegister != 0)
-		output.DecrementYRegister = true
+		shouldJump = (input.yRegister != 0)
+		output.decrementYRegister = true
 	case instruction.JumpXNotEqualY:
-		if !input.XRegisterInitialized {
+		if !input.xRegisterInitialized {
 			return output, ErrXRegisterNotInitialized
 		}
-		if !input.YRegisterInitialized {
+		if !input.yRegisterInitialized {
 			return output, ErrYRegisterNotInitialized
 		}
-		shouldJump = (input.XRegister != input.YRegister)
+		shouldJump = (input.xRegister != input.yRegister)
 	case instruction.JumpPin:
-		shouldJump = (input.PinInputs>>input.JumpPin)&0b1 == 1
+		shouldJump = (input.pinInputs>>input.jumpPin)&0b1 == 1
 	case instruction.JumpOSRENotEmpty:
-		shouldJump = input.OutputShiftRegisterCounter < input.PullThreshold
+		shouldJump = input.outputShiftRegisterCounter < input.pullThreshold
 	default:
 		return output, ErrJumpConditionInvalid
 	}
 
 	if shouldJump {
-		output.Jumped = true
-		output.NewProgramCounter = address
+		output.jumped = true
+		output.newProgramCounter = address
 	}
 
 	return output, nil

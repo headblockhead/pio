@@ -9,86 +9,86 @@ import (
 	"git.edwardh.dev/pio/instruction"
 )
 
-type InInput struct {
-	AlreadyStalled            bool
-	AutopushEnabled           bool
-	BaseInPin                 uint8
-	InShiftMovesRight         bool
-	InputShiftRegister        uint32
-	InputShiftRegisterCounter uint8
-	OutputShiftRegister       uint32
-	PinInputs                 uint32
-	PushThreshold             uint8
-	XRegister                 uint32
-	XRegisterInitialized      bool
-	YRegister                 uint32
-	YRegisterInitialized      bool
+type inInput struct {
+	alreadyStalled            bool
+	autopushEnabled           bool
+	baseInPin                 uint8
+	inShiftMovesRight         bool
+	inputShiftRegister        uint32
+	inputShiftRegisterCounter uint8
+	outputShiftRegister       uint32
+	pinInputs                 uint32
+	pushThreshold             uint8
+	xRegister                 uint32
+	xRegisterInitialized      bool
+	yRegister                 uint32
+	yRegisterInitialized      bool
 
-	FIFORX fifo.Writer
+	fifoRX fifo.Writer
 }
 
-type InOutput struct {
-	NewInputShiftRegister        uint32
-	NewInputShiftRegisterCounter uint8
-	ShouldStall                  bool
+type inOutput struct {
+	newInputShiftRegister        uint32
+	newInputShiftRegisterCounter uint8
+	shouldStall                  bool
 }
 
 var ErrInSourceInvalid = errors.New("in source invalid")
 
-func ExecuteIn(instr instruction.In, input InInput) (InOutput, error) {
-	var output InOutput = InOutput{
-		NewInputShiftRegister:        input.InputShiftRegister,
-		NewInputShiftRegisterCounter: input.InputShiftRegisterCounter,
-		ShouldStall:                  false,
+func executeIn(instr instruction.In, input inInput) (inOutput, error) {
+	var output inOutput = inOutput{
+		newInputShiftRegister:        input.inputShiftRegister,
+		newInputShiftRegisterCounter: input.inputShiftRegisterCounter,
+		shouldStall:                  false,
 	}
 
-	if !input.AlreadyStalled {
+	if !input.alreadyStalled {
 		var data uint32
 		var mask uint32 = (0b1 << instr.BitCount()) - 1
 		switch instr.Source() {
 		case instruction.InSourcePins:
-			data = bits.RotateLeft32(input.PinInputs, -int(input.BaseInPin)) & mask
+			data = bits.RotateLeft32(input.pinInputs, -int(input.baseInPin)) & mask
 		case instruction.InSourceX:
-			if !input.XRegisterInitialized {
+			if !input.xRegisterInitialized {
 				return output, ErrXRegisterNotInitialized
 			}
-			data = (input.XRegister & mask)
+			data = (input.xRegister & mask)
 		case instruction.InSourceY:
-			if !input.YRegisterInitialized {
+			if !input.yRegisterInitialized {
 				return output, ErrYRegisterNotInitialized
 			}
-			data = (input.YRegister & mask)
+			data = (input.yRegister & mask)
 		case instruction.InSourceNull:
 			data = 0
 		case instruction.InSourceISR:
-			data = (input.InputShiftRegister & mask)
+			data = (input.inputShiftRegister & mask)
 		case instruction.InSourceOSR:
-			data = (input.OutputShiftRegister & mask)
+			data = (input.outputShiftRegister & mask)
 		default:
 			return output, ErrInSourceInvalid
 		}
-		if input.InShiftMovesRight {
-			output.NewInputShiftRegister >>= instr.BitCount()
-			output.NewInputShiftRegister |= (data << (32 - instr.BitCount()))
+		if input.inShiftMovesRight {
+			output.newInputShiftRegister >>= instr.BitCount()
+			output.newInputShiftRegister |= (data << (32 - instr.BitCount()))
 		} else {
-			output.NewInputShiftRegister <<= instr.BitCount()
-			output.NewInputShiftRegister |= data
+			output.newInputShiftRegister <<= instr.BitCount()
+			output.newInputShiftRegister |= data
 		}
-		output.NewInputShiftRegisterCounter += instr.BitCount()
-		if output.NewInputShiftRegisterCounter > 32 {
-			output.NewInputShiftRegisterCounter = 32
+		output.newInputShiftRegisterCounter += instr.BitCount()
+		if output.newInputShiftRegisterCounter > 32 {
+			output.newInputShiftRegisterCounter = 32
 		}
 	}
 
-	shouldPush := input.AutopushEnabled && (output.NewInputShiftRegisterCounter >= input.PushThreshold)
-	output.ShouldStall = shouldPush && input.FIFORX.IsFull()
-	if shouldPush && !input.FIFORX.IsFull() {
-		err := input.FIFORX.Write(output.NewInputShiftRegister)
+	shouldPush := input.autopushEnabled && (output.newInputShiftRegisterCounter >= input.pushThreshold)
+	output.shouldStall = shouldPush && input.fifoRX.IsFull()
+	if shouldPush && !input.fifoRX.IsFull() {
+		err := input.fifoRX.Write(output.newInputShiftRegister)
 		if err != nil {
 			return output, fmt.Errorf("error writing RX FIFO for autopush: %w", err)
 		}
-		output.NewInputShiftRegister = 0
-		output.NewInputShiftRegisterCounter = 0
+		output.newInputShiftRegister = 0
+		output.newInputShiftRegisterCounter = 0
 	}
 
 	return output, nil

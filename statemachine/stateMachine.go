@@ -809,260 +809,260 @@ func (sm *StateMachine) execute(instr uint16, currentlyStalled bool) (jumped boo
 	switch instruction.DecodeType(instr) {
 	case instruction.TypeJump:
 		j := instruction.DecodeJump(instr)
-		output, err := ExecuteJump(j, JumpInput{
-			JumpPin:                    sm.jumpPin,
-			OutputShiftRegisterCounter: sm.outputShiftRegisterCounter,
-			PinInputs:                  sm.pinInputs,
-			PullThreshold:              sm.pullThreshold,
-			XRegister:                  sm.xRegister,
-			XRegisterInitialized:       sm.xRegisterInitialized,
-			YRegister:                  sm.yRegister,
-			YRegisterInitialized:       sm.yRegisterInitialized,
+		output, err := executeJump(j, jumpInput{
+			jumpPin:                    sm.jumpPin,
+			outputShiftRegisterCounter: sm.outputShiftRegisterCounter,
+			pinInputs:                  sm.pinInputs,
+			pullThreshold:              sm.pullThreshold,
+			xRegister:                  sm.xRegister,
+			xRegisterInitialized:       sm.xRegisterInitialized,
+			yRegister:                  sm.yRegister,
+			yRegisterInitialized:       sm.yRegisterInitialized,
 		})
 		if err != nil {
 			return false, false, fmt.Errorf("jump: %w", err)
 		}
-		if output.DecrementXRegister {
+		if output.decrementXRegister {
 			sm.xRegister--
 		}
-		if output.DecrementYRegister {
+		if output.decrementYRegister {
 			sm.yRegister--
 		}
-		if output.Jumped {
+		if output.jumped {
 			jumped = true
-			sm.programCounter = output.NewProgramCounter
+			sm.programCounter = output.newProgramCounter
 		}
 	case instruction.TypeWait:
 		w := instruction.DecodeWait(instr)
-		output, err := ExecuteWait(w, WaitInput{
-			BaseInPin:         sm.baseInPin,
-			IRQInputs:         sm.irqInputs,
-			PinInputs:         sm.pinInputs,
-			StateMachineIndex: sm.index,
+		output, err := executeWait(w, waitInput{
+			baseInPin:         sm.baseInPin,
+			irqInputs:         sm.irqInputs,
+			pinInputs:         sm.pinInputs,
+			stateMachineIndex: sm.index,
 		})
 		if err != nil {
 			return false, false, fmt.Errorf("wait: %w", err)
 		}
-		if output.ClearIRQsMask != 0 {
-			sm.irqWrites &= ^output.ClearIRQsMask
-			sm.irqWritesMask |= output.ClearIRQsMask
+		if output.clearIRQsMask != 0 {
+			sm.irqWrites &= ^output.clearIRQsMask
+			sm.irqWritesMask |= output.clearIRQsMask
 		}
-		if output.ShouldStall {
+		if output.shouldStall {
 			stalled = true
 		}
 	case instruction.TypeIn:
 		i := instruction.DecodeIn(instr)
-		output, err := ExecuteIn(i, InInput{
-			AlreadyStalled:            currentlyStalled,
-			AutopushEnabled:           sm.autopushEnabled,
-			BaseInPin:                 sm.baseInPin,
-			InShiftMovesRight:         sm.inShiftMovesRight,
-			InputShiftRegister:        sm.inputShiftRegister,
-			InputShiftRegisterCounter: sm.inputShiftRegisterCounter,
-			OutputShiftRegister:       sm.outputShiftRegister,
-			PinInputs:                 sm.pinInputs,
-			PushThreshold:             sm.pushThreshold,
-			XRegister:                 sm.xRegister,
-			XRegisterInitialized:      sm.xRegisterInitialized,
-			YRegister:                 sm.yRegister,
-			YRegisterInitialized:      sm.yRegisterInitialized,
+		output, err := executeIn(i, inInput{
+			alreadyStalled:            currentlyStalled,
+			autopushEnabled:           sm.autopushEnabled,
+			baseInPin:                 sm.baseInPin,
+			inShiftMovesRight:         sm.inShiftMovesRight,
+			inputShiftRegister:        sm.inputShiftRegister,
+			inputShiftRegisterCounter: sm.inputShiftRegisterCounter,
+			outputShiftRegister:       sm.outputShiftRegister,
+			pinInputs:                 sm.pinInputs,
+			pushThreshold:             sm.pushThreshold,
+			xRegister:                 sm.xRegister,
+			xRegisterInitialized:      sm.xRegisterInitialized,
+			yRegister:                 sm.yRegister,
+			yRegisterInitialized:      sm.yRegisterInitialized,
 
-			FIFORX: sm.fifoRX,
+			fifoRX: sm.fifoRX,
 		})
 		if err != nil {
 			return false, false, fmt.Errorf("in: %w", err)
 		}
-		sm.inputShiftRegister = output.NewInputShiftRegister
-		sm.inputShiftRegisterCounter = output.NewInputShiftRegisterCounter
-		if output.ShouldStall {
+		sm.inputShiftRegister = output.newInputShiftRegister
+		sm.inputShiftRegisterCounter = output.newInputShiftRegisterCounter
+		if output.shouldStall {
 			stalled = true
 		}
 	case instruction.TypeOut:
 		o := instruction.DecodeOut(instr)
-		output, err := ExecuteOut(o, OutInput{
-			AutopullEnabled:              sm.autopullEnabled,
-			BaseOutPin:                   sm.baseOutPin,
-			OutShiftMovesRight:           sm.outShiftMovesRight,
-			OutWriteEnableBitIndex:       sm.outWriteEnableBitIndex,
-			OutWriteEnableUsed:           sm.outWriteEnableUsed,
-			OutputShiftRegister:          sm.outputShiftRegister,
-			OutputShiftRegisterCounter:   sm.outputShiftRegisterCounter,
-			PinCountOut:                  sm.pinCountOut,
-			PullThreshold:                sm.pullThreshold,
-			StickyOutSetAssertionEnabled: sm.stickyOutSetAssertionEnabled,
+		output, err := executeOut(o, outInput{
+			autopullEnabled:              sm.autopullEnabled,
+			baseOutPin:                   sm.baseOutPin,
+			outShiftMovesRight:           sm.outShiftMovesRight,
+			outWriteEnableBitIndex:       sm.outWriteEnableBitIndex,
+			outWriteEnableUsed:           sm.outWriteEnableUsed,
+			outputShiftRegister:          sm.outputShiftRegister,
+			outputShiftRegisterCounter:   sm.outputShiftRegisterCounter,
+			pinCountOut:                  sm.pinCountOut,
+			pullThreshold:                sm.pullThreshold,
+			stickyOutSetAssertionEnabled: sm.stickyOutSetAssertionEnabled,
 
-			FIFOTX: sm.fifoTX,
+			fifoTX: sm.fifoTX,
 		})
 		if err != nil {
 			return false, false, fmt.Errorf("out: %w", err)
 		}
-		if output.NewEXECdInstruction {
+		if output.newEXECdInstruction {
 			sm.newEXECdInstruction = true
-			sm.latchedInstruction = output.EXECdInstruction
+			sm.latchedInstruction = output.execdInstruction
 		}
-		if output.Jumped {
+		if output.jumped {
 			jumped = true
-			sm.programCounter = output.NewProgramCounter
+			sm.programCounter = output.newProgramCounter
 		}
-		if output.WrittenToInputShiftRegister {
-			sm.inputShiftRegister = output.NewInputShiftRegister
-			sm.inputShiftRegisterCounter = output.NewInputShiftRegisterCounter
+		if output.writtenToInputShiftRegister {
+			sm.inputShiftRegister = output.newInputShiftRegister
+			sm.inputShiftRegisterCounter = output.newInputShiftRegisterCounter
 		}
-		sm.outputShiftRegister = output.NewOutputShiftRegister
-		sm.outputShiftRegisterCounter = output.NewOutputShiftRegisterCounter
-		if output.NewPinOutputEnablesMask != 0 {
-			sm.pinOutputEnables &= ^output.NewPinOutputEnablesMask
-			sm.pinOutputEnables |= output.NewPinOutputEnables
-			sm.pinOutputEnablesMask |= output.NewPinOutputEnablesMask
+		sm.outputShiftRegister = output.newOutputShiftRegister
+		sm.outputShiftRegisterCounter = output.newOutputShiftRegisterCounter
+		if output.newPinOutputEnablesMask != 0 {
+			sm.pinOutputEnables &= ^output.newPinOutputEnablesMask
+			sm.pinOutputEnables |= output.newPinOutputEnables
+			sm.pinOutputEnablesMask |= output.newPinOutputEnablesMask
 		}
-		if output.NewPinOutputsMask != 0 {
-			sm.pinOutputs &= ^output.NewPinOutputsMask
-			sm.pinOutputs |= output.NewPinOutputs
-			sm.pinOutputsMask |= output.NewPinOutputsMask
+		if output.newPinOutputsMask != 0 {
+			sm.pinOutputs &= ^output.newPinOutputsMask
+			sm.pinOutputs |= output.newPinOutputs
+			sm.pinOutputsMask |= output.newPinOutputsMask
 		}
-		if output.WrittenToXRegister {
-			sm.xRegister = output.NewXRegister
+		if output.writtenToXRegister {
+			sm.xRegister = output.newXRegister
 			sm.xRegisterInitialized = true
 		}
-		if output.WrittenToYRegister {
-			sm.yRegister = output.NewYRegister
+		if output.writtenToYRegister {
+			sm.yRegister = output.newYRegister
 			sm.yRegisterInitialized = true
 		}
-		if output.ShouldStall {
+		if output.shouldStall {
 			stalled = true
 		}
 	case instruction.TypePushPull:
 		pp := instruction.DecodePushPull(instr)
-		output, err := ExecutePushPull(pp, PushPullInput{
-			AutopullEnabled:            sm.autopullEnabled,
-			InputShiftRegister:         sm.inputShiftRegister,
-			InputShiftRegisterCounter:  sm.inputShiftRegisterCounter,
-			OutputShiftRegister:        sm.outputShiftRegister,
-			OutputShiftRegisterCounter: sm.outputShiftRegisterCounter,
-			PullThreshold:              sm.pullThreshold,
-			PushThreshold:              sm.pushThreshold,
-			XRegister:                  sm.xRegister,
-			XRegisterInitialized:       sm.xRegisterInitialized,
+		output, err := executePushPull(pp, pushPullInput{
+			autopullEnabled:            sm.autopullEnabled,
+			inputShiftRegister:         sm.inputShiftRegister,
+			inputShiftRegisterCounter:  sm.inputShiftRegisterCounter,
+			outputShiftRegister:        sm.outputShiftRegister,
+			outputShiftRegisterCounter: sm.outputShiftRegisterCounter,
+			pullThreshold:              sm.pullThreshold,
+			pushThreshold:              sm.pushThreshold,
+			xRegister:                  sm.xRegister,
+			xRegisterInitialized:       sm.xRegisterInitialized,
 
-			FIFOTX: sm.fifoTX,
-			FIFORX: sm.fifoRX,
+			fifoTX: sm.fifoTX,
+			fifoRX: sm.fifoRX,
 		})
 		if err != nil {
 			return false, false, fmt.Errorf("push/pull: %w", err)
 		}
-		sm.inputShiftRegister = output.NewInputShiftRegister
-		sm.inputShiftRegisterCounter = output.NewInputShiftRegisterCounter
-		sm.outputShiftRegister = output.NewOutputShiftRegister
-		sm.outputShiftRegisterCounter = output.NewOutputShiftRegisterCounter
-		if output.ShouldStall {
+		sm.inputShiftRegister = output.newInputShiftRegister
+		sm.inputShiftRegisterCounter = output.newInputShiftRegisterCounter
+		sm.outputShiftRegister = output.newOutputShiftRegister
+		sm.outputShiftRegisterCounter = output.newOutputShiftRegisterCounter
+		if output.shouldStall {
 			stalled = true
 		}
 	case instruction.TypeMove:
 		m := instruction.DecodeMove(instr)
-		output, err := ExecuteMove(m, MoveInput{
-			AutopullEnabled:              sm.autopullEnabled,
-			BaseInPin:                    sm.baseInPin,
-			BaseOutPin:                   sm.baseOutPin,
-			InputShiftRegister:           sm.inputShiftRegister,
-			OutWriteEnableBitIndex:       sm.outWriteEnableBitIndex,
-			OutWriteEnableUsed:           sm.outWriteEnableUsed,
-			OutputShiftRegister:          sm.outputShiftRegister,
-			PinCountOut:                  sm.pinCountOut,
-			PinInputs:                    sm.pinInputs,
-			StatusValueComparisonLevel:   sm.statusValueComparisonLevel,
-			StatusValueUsesRXFIFO:        sm.statusValueUsesRXFIFO,
-			StickyOutSetAssertionEnabled: sm.stickyOutSetAssertionEnabled,
-			XRegister:                    sm.xRegister,
-			XRegisterInitialized:         sm.xRegisterInitialized,
-			YRegister:                    sm.yRegister,
-			YRegisterInitialized:         sm.yRegisterInitialized,
+		output, err := executeMove(m, moveInput{
+			autopullEnabled:              sm.autopullEnabled,
+			baseInPin:                    sm.baseInPin,
+			baseOutPin:                   sm.baseOutPin,
+			inputShiftRegister:           sm.inputShiftRegister,
+			outWriteEnableBitIndex:       sm.outWriteEnableBitIndex,
+			outWriteEnableUsed:           sm.outWriteEnableUsed,
+			outputShiftRegister:          sm.outputShiftRegister,
+			pinCountOut:                  sm.pinCountOut,
+			pinInputs:                    sm.pinInputs,
+			statusValueComparisonLevel:   sm.statusValueComparisonLevel,
+			statusValueUsesRXFIFO:        sm.statusValueUsesRXFIFO,
+			stickyOutSetAssertionEnabled: sm.stickyOutSetAssertionEnabled,
+			xRegister:                    sm.xRegister,
+			xRegisterInitialized:         sm.xRegisterInitialized,
+			yRegister:                    sm.yRegister,
+			yRegisterInitialized:         sm.yRegisterInitialized,
 
-			FIFORX: sm.fifoRX,
-			FIFOTX: sm.fifoTX,
+			fifoRX: sm.fifoRX,
+			fifoTX: sm.fifoTX,
 		})
 		if err != nil {
 			return false, false, fmt.Errorf("move: %w", err)
 		}
-		if output.NewEXECdInstruction {
+		if output.newEXECdInstruction {
 			sm.newEXECdInstruction = true
-			sm.latchedInstruction = output.EXECdInstruction
+			sm.latchedInstruction = output.execdInstruction
 		}
-		if output.Jumped {
+		if output.jumped {
 			jumped = true
-			sm.programCounter = output.NewProgramCounter
+			sm.programCounter = output.newProgramCounter
 		}
-		if output.WrittenToInputShiftRegister {
-			sm.inputShiftRegister = output.NewInputShiftRegister
-			sm.inputShiftRegisterCounter = output.NewInputShiftRegisterCounter
+		if output.writtenToInputShiftRegister {
+			sm.inputShiftRegister = output.newInputShiftRegister
+			sm.inputShiftRegisterCounter = output.newInputShiftRegisterCounter
 		}
-		if output.WrittenToOutputShiftRegister {
-			sm.outputShiftRegister = output.NewOutputShiftRegister
-			sm.outputShiftRegisterCounter = output.NewOutputShiftRegisterCounter
+		if output.writtenToOutputShiftRegister {
+			sm.outputShiftRegister = output.newOutputShiftRegister
+			sm.outputShiftRegisterCounter = output.newOutputShiftRegisterCounter
 		}
-		if output.NewPinOutputEnablesMask != 0 {
-			sm.pinOutputEnables &= ^output.NewPinOutputEnablesMask
-			sm.pinOutputEnables |= output.NewPinOutputEnables
-			sm.pinOutputEnablesMask |= output.NewPinOutputEnablesMask
+		if output.newPinOutputEnablesMask != 0 {
+			sm.pinOutputEnables &= ^output.newPinOutputEnablesMask
+			sm.pinOutputEnables |= output.newPinOutputEnables
+			sm.pinOutputEnablesMask |= output.newPinOutputEnablesMask
 		}
-		if output.NewPinOutputsMask != 0 {
-			sm.pinOutputs &= ^output.NewPinOutputsMask
-			sm.pinOutputs |= output.NewPinOutputs
-			sm.pinOutputsMask |= output.NewPinOutputsMask
+		if output.newPinOutputsMask != 0 {
+			sm.pinOutputs &= ^output.newPinOutputsMask
+			sm.pinOutputs |= output.newPinOutputs
+			sm.pinOutputsMask |= output.newPinOutputsMask
 		}
-		if output.WrittenToXRegister {
-			sm.xRegister = output.NewXRegister
+		if output.writtenToXRegister {
+			sm.xRegister = output.newXRegister
 			sm.xRegisterInitialized = true
 		}
-		if output.WrittenToYRegister {
-			sm.yRegister = output.NewYRegister
+		if output.writtenToYRegister {
+			sm.yRegister = output.newYRegister
 			sm.yRegisterInitialized = true
 		}
 	case instruction.TypeIRQ:
 		i := instruction.DecodeIRQ(instr)
-		output, err := ExecuteIRQ(i, IRQInput{
-			AlreadyStalled:    currentlyStalled,
-			IRQInputs:         sm.irqInputs,
-			StateMachineIndex: sm.index,
+		output, err := executeIRQ(i, irqInput{
+			alreadyStalled:    currentlyStalled,
+			irqInputs:         sm.irqInputs,
+			stateMachineIndex: sm.index,
 		})
 		if err != nil {
 			return false, false, fmt.Errorf("irq: %w", err)
 		}
-		if output.ClearIRQsMask != 0 {
-			sm.irqWrites &= ^output.ClearIRQsMask
-			sm.irqWritesMask |= output.ClearIRQsMask
+		if output.clearIRQsMask != 0 {
+			sm.irqWrites &= ^output.clearIRQsMask
+			sm.irqWritesMask |= output.clearIRQsMask
 		}
-		if output.SetIRQsMask != 0 {
-			sm.irqWrites |= output.SetIRQsMask
-			sm.irqWritesMask |= output.SetIRQsMask
+		if output.setIRQsMask != 0 {
+			sm.irqWrites |= output.setIRQsMask
+			sm.irqWritesMask |= output.setIRQsMask
 		}
-		if output.ShouldStall {
+		if output.shouldStall {
 			stalled = true
 		}
 	case instruction.TypeSet:
 		s := instruction.DecodeSet(instr)
-		output, err := ExecuteSet(s, SetInput{
-			BaseSetPin:  sm.baseSetPin,
-			PinCountSet: sm.pinCountSet,
+		output, err := executeSet(s, setInput{
+			baseSetPin:  sm.baseSetPin,
+			pinCountSet: sm.pinCountSet,
 		})
 		if err != nil {
 			return false, false, fmt.Errorf("set: %w", err)
 		}
-		if output.NewPinOutputEnablesMask != 0 {
-			sm.pinOutputEnables &= ^output.NewPinOutputEnablesMask
-			sm.pinOutputEnables |= output.NewPinOutputEnables
-			sm.pinOutputEnablesMask |= output.NewPinOutputEnablesMask
+		if output.newPinOutputEnablesMask != 0 {
+			sm.pinOutputEnables &= ^output.newPinOutputEnablesMask
+			sm.pinOutputEnables |= output.newPinOutputEnables
+			sm.pinOutputEnablesMask |= output.newPinOutputEnablesMask
 		}
-		if output.NewPinOutputsMask != 0 {
-			sm.pinOutputs &= ^output.NewPinOutputsMask
-			sm.pinOutputs |= output.NewPinOutputs
-			sm.pinOutputsMask |= output.NewPinOutputsMask
+		if output.newPinOutputsMask != 0 {
+			sm.pinOutputs &= ^output.newPinOutputsMask
+			sm.pinOutputs |= output.newPinOutputs
+			sm.pinOutputsMask |= output.newPinOutputsMask
 		}
-		if output.WrittenToXRegister {
-			sm.xRegister = output.NewXRegister
+		if output.writtenToXRegister {
+			sm.xRegister = output.newXRegister
 			sm.xRegisterInitialized = true
 		}
-		if output.WrittenToYRegister {
-			sm.yRegister = output.NewYRegister
+		if output.writtenToYRegister {
+			sm.yRegister = output.newYRegister
 			sm.yRegisterInitialized = true
 		}
 	default:
