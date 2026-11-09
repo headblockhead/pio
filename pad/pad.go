@@ -164,7 +164,12 @@ func (p *Pad) Operator() Operator {
 
 func (p *Pad) SetOutputEnabled(outputEnabled bool) { p.outputEnabled = outputEnabled }
 func (p *Pad) SetOutput(output bool)               { p.output = output }
-func (p *Pad) GetInput() bool                      { return p.inputHistory[len(p.inputHistory)-1] }
+func (p *Pad) GetInput() bool {
+	if !p.inputEnabled {
+		return false
+	}
+	return p.inputHistory[len(p.inputHistory)-1]
+}
 
 func (p *Pad) Tick() error {
 	for i := len(p.stateHistory) - 1; i > 0; i-- {

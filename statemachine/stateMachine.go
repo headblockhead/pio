@@ -716,11 +716,14 @@ func (sm *StateMachine) Tick() error {
 	sm.irqWritesMask = 0
 
 	if sm.newForcedInstruction {
-		_, stalled, err := sm.execute(sm.forcedInstruction, false)
+		jumped, stalled, err := sm.execute(sm.forcedInstruction, false)
 		if err != nil {
 			return fmt.Errorf("error executing forced instruction %016b: %w", sm.forcedInstruction, err)
 		}
 		sm.newForcedInstruction = false
+		if jumped {
+			sm.stalled = false
+		}
 		sm.forcedInstructionStalled = stalled
 		if sm.forcedInstructionStalled {
 			if sm.newEXECdInstruction || sm.execdInstructionStalled {
@@ -752,11 +755,11 @@ func (sm *StateMachine) Tick() error {
 
 func (sm *StateMachine) dividedTick() error {
 	if sm.newEXECdInstruction {
+		sm.newEXECdInstruction = false
 		_, stalled, err := sm.execute(sm.latchedInstruction, false)
 		if err != nil {
 			return fmt.Errorf("error executing EXEC'd instruction %016b: %w", sm.latchedInstruction, err)
 		}
-		sm.newEXECdInstruction = false
 		sm.execdInstructionStalled = stalled
 	} else if sm.execdInstructionStalled {
 		_, stalled, err := sm.execute(sm.latchedInstruction, true)
@@ -778,6 +781,10 @@ func (sm *StateMachine) dividedTick() error {
 		}
 		sm.stalled = stalled
 	} else if sm.delaysRemaining > 0 {
+		err := sm.tryAutopull()
+		if err != nil {
+			return fmt.Errorf("error performing autopull: %w", err)
+		}
 		sm.delaysRemaining--
 	} else {
 		instr, err := sm.memoryReader.Read(sm.programCounter)
@@ -1062,13 +1069,9 @@ func (sm *StateMachine) execute(instr uint16, currentlyStalled bool) (jumped boo
 		return false, false, ErrInstructionTypeInvalid
 	}
 
-	if sm.autopullEnabled && sm.outputShiftRegisterCounter >= sm.pullThreshold && !sm.fifoTX.IsEmpty() {
-		osr, err := sm.fifoTX.Read()
-		if err != nil {
-			return false, false, fmt.Errorf("error reading TX FIFO for autopull: %w", err)
-		}
-		sm.outputShiftRegister = osr
-		sm.outputShiftRegisterCounter = 0
+	err = sm.tryAutopull()
+	if err != nil {
+		return false, false, fmt.Errorf("error performing autopull: %w", err)
 	}
 
 	if sm.bitCountSideset > 0 {
@@ -1084,11 +1087,13 @@ func (sm *StateMachine) execute(instr uint16, currentlyStalled bool) (jumped boo
 		}
 	}
 
-	if (sm.bitCountSideset < 5) && !sm.newForcedInstruction {
-		d := instruction.DecodeDelay(instr, sm.bitCountSideset)
-		sm.delaysRemaining = d.Cycles()
-	} else {
-		sm.delaysRemaining = 0
+	if !(sm.newForcedInstruction || sm.forcedInstructionStalled) {
+		if sm.bitCountSideset < 5 {
+			d := instruction.DecodeDelay(instr, sm.bitCountSideset)
+			sm.delaysRemaining = d.Cycles()
+		} else {
+			sm.delaysRemaining = 0
+		}
 	}
 
 	return jumped, stalled, nil
@@ -1100,6 +1105,20 @@ func (sm *StateMachine) incrementProgramCounter() {
 	} else {
 		sm.programCounter = (sm.programCounter + 1) % 32
 	}
+}
+
+func (sm *StateMachine) tryAutopull() error {
+	if !sm.autopullEnabled || sm.outputShiftRegisterCounter < sm.pullThreshold || sm.fifoTX.IsEmpty() {
+		return nil
+	}
+
+	osr, err := sm.fifoTX.Read()
+	if err != nil {
+		return fmt.Errorf("error reading TX FIFO: %w", err)
+	}
+	sm.outputShiftRegister = osr
+	sm.outputShiftRegisterCounter = 0
+	return nil
 }
 
 var ErrXRegisterNotInitialized = errors.New("x register not initialized")
