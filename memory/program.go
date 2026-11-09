@@ -2,20 +2,23 @@ package memory
 
 type Program struct {
 	instructions []uint16
-	origin       *uint
+	hasOrigin    bool
+	origin       uint8
 }
 
 func NewProgram(instructions []uint16) *Program {
 	return &Program{
 		instructions: instructions,
-		origin:       nil,
+		hasOrigin:    false,
+		origin:       0,
 	}
 }
 
-func NewProgramWithOrigin(instructions []uint16, origin uint) *Program {
+func NewProgramWithOrigin(instructions []uint16, origin uint8) *Program {
 	return &Program{
 		instructions: instructions,
-		origin:       &origin,
+		hasOrigin:    true,
+		origin:       origin,
 	}
 }
 
@@ -23,6 +26,10 @@ func (p *Program) Instructions() []uint16 {
 	return p.instructions
 }
 
-func (p *Program) Origin() *uint {
+func (p *Program) HasOrigin() bool {
+	return p.hasOrigin
+}
+
+func (p *Program) Origin() uint8 {
 	return p.origin
 }

@@ -10,19 +10,19 @@ import (
 )
 
 type InInput struct {
+	AlreadyStalled            bool
+	AutopushEnabled           bool
+	BaseInPin                 uint8
+	InShiftMovesRight         bool
+	InputShiftRegister        uint32
+	InputShiftRegisterCounter uint8
+	OutputShiftRegister       uint32
+	PinInputs                 uint32
+	PushThreshold             uint8
 	XRegister                 uint32
 	XRegisterInitialized      bool
 	YRegister                 uint32
 	YRegisterInitialized      bool
-	AlreadyStalled            bool
-	PinInputs                 uint32
-	BaseInPin                 uint8
-	InputShiftRegister        uint32
-	InputShiftRegisterCounter uint8
-	OutputShiftRegister       uint32
-	InShiftMovesRight         bool
-	AutopushEnabled           bool
-	PushThreshold             uint8
 
 	FIFORX fifo.Writer
 }

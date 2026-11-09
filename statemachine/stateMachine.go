@@ -6,12 +6,13 @@ import (
 	"math/bits"
 
 	"git.edwardh.dev/pio/fifo"
+	"git.edwardh.dev/pio/instruction"
 	"git.edwardh.dev/pio/memory"
 	"git.edwardh.dev/pio/simulation"
 )
 
 type Observer interface {
-	Index() uint
+	Index() uint8
 
 	FIFORXObserver() fifo.Observer
 	FIFOTXObserver() fifo.Observer
@@ -30,34 +31,33 @@ type Observer interface {
 	SidesetIsOptional() bool
 	SidesetControlsPinDirection() bool
 	OutWriteEnableUsed() bool
-	OutWriteEnableBitIndex() uint
+	OutWriteEnableBitIndex() uint8
 	StickyOutSetAssertionEnabled() bool
 
-	WrapFromAddress() uint
-	WrapToAddress() uint
+	WrapFromAddress() uint8
+	WrapToAddress() uint8
 
 	StatusValueUsesRXFIFO() bool
-	StatusValueComparisonLevel() uint
-	PullThreshold() uint
-	PushThreshold() uint
+	StatusValueComparisonLevel() uint8
+	PullThreshold() uint8
+	PushThreshold() uint8
 	OutShiftMovesRight() bool
 	InShiftMovesRight() bool
 	AutopullEnabled() bool
 	AutopushEnabled() bool
 
-	BaseSidesetPin() uint
-	BitCountSideset() uint
-	BaseSetPin() uint
-	PinCountSet() uint
-	BaseInPin() uint
-	BaseOutPin() uint
-	PinCountOut() uint
-	JumpPin() uint
+	BaseSidesetPin() uint8
+	BitCountSideset() uint8
+	BaseSetPin() uint8
+	PinCountSet() uint8
+	BaseInPin() uint8
+	BaseOutPin() uint8
+	PinCountOut() uint8
+	JumpPin() uint8
 
-	ProgramCounter() uint
+	ProgramCounter() uint8
 	Stalled() bool
-	Jumped() bool
-	DelaysRemaining() uint
+	DelaysRemaining() uint8
 	NewForcedInstruction() bool
 	ForcedInstruction() uint16
 	ForcedInstructionStalled() bool
@@ -66,19 +66,19 @@ type Observer interface {
 	LatchedInstruction() uint16
 
 	OutputShiftRegister() uint32
-	OutputShiftRegisterCounter() uint
+	OutputShiftRegisterCounter() uint8
 	InputShiftRegister() uint32
-	InputShiftRegisterCounter() uint
+	InputShiftRegisterCounter() uint8
 	XRegister() uint32
 	XRegisterInitialized() bool
 	YRegister() uint32
 	YRegisterInitialized() bool
 
 	ClockDivisor() float32
-	ClockDivisorInteger() uint
+	ClockDivisorInteger() uint32
 	ClockDivisorFractional() uint8
 
-	ClockDividerTicksRemaining() uint
+	ClockDividerTicksRemaining() uint32
 	ClockDividerFractionAccumulator() uint8
 }
 
@@ -89,36 +89,36 @@ type Configurator interface {
 	FIFOTXWriter() fifo.Writer
 
 	ClearFIFOs()
-	Init(uint) error
+	Init(uint8) error
 
 	Restart()
 	SetEnabled(bool)
 	SetSidesetIsOptional(bool) error
 	SetSidesetControlsPinDirection(bool)
 	SetOutWriteEnableUsed(bool)
-	SetOutWriteEnableBitIndex(uint) error
+	SetOutWriteEnableBitIndex(uint8) error
 	SetStickyOutSetAssertionEnabled(bool)
 
-	SetWrapFromAddress(uint) error
-	SetWrapToAddress(uint) error
+	SetWrapFromAddress(uint8) error
+	SetWrapToAddress(uint8) error
 
 	SetStatusValueUsesRXFIFO(bool)
-	SetStatusValueComparisonLevel(uint) error
-	SetPullThreshold(uint) error
-	SetPushThreshold(uint) error
+	SetStatusValueComparisonLevel(uint8) error
+	SetPullThreshold(uint8) error
+	SetPushThreshold(uint8) error
 	SetOutShiftMovesRight(bool)
 	SetInShiftMovesRight(bool)
 	SetAutopullEnabled(bool)
 	SetAutopushEnabled(bool)
 
-	SetBaseSidesetPin(uint) error
-	SetBitCountSideset(uint) error
-	SetBaseSetPin(uint) error
-	SetPinCountSet(uint) error
-	SetBaseInPin(uint) error
-	SetBaseOutPin(uint) error
-	SetPinCountOut(uint) error
-	SetJumpPin(uint) error
+	SetBaseSidesetPin(uint8) error
+	SetBitCountSideset(uint8) error
+	SetBaseSetPin(uint8) error
+	SetPinCountSet(uint8) error
+	SetBaseInPin(uint8) error
+	SetBaseOutPin(uint8) error
+	SetPinCountOut(uint8) error
+	SetJumpPin(uint8) error
 
 	SetFIFOJoin(FIFOJoin) error
 
@@ -126,13 +126,13 @@ type Configurator interface {
 
 	RestartClockDivider()
 	SetClockDivisor(float32) error
-	SetClockDivisorInteger(uint) error
+	SetClockDivisorInteger(uint32) error
 	SetClockDivisorFractional(uint8)
 
-	SetOutShift(bool, bool, uint) error
-	SetInShift(bool, bool, uint) error
-	SetSideset(uint, bool, bool) error
-	SetWrap(uint, uint) error
+	SetOutShift(bool, bool, uint8) error
+	SetInShift(bool, bool, uint8) error
+	SetSideset(uint8, bool, bool) error
+	SetWrap(uint8, uint8) error
 }
 
 type Operator interface {
@@ -156,7 +156,7 @@ type StateMachine struct {
 	id    simulation.ComponentIdentifier
 	label string
 
-	index uint
+	index uint8
 
 	memoryReader memory.Reader
 	fifoRX       *fifo.FIFO
@@ -179,34 +179,33 @@ type StateMachine struct {
 	sidesetIsOptional            bool
 	sidesetControlsPinDirection  bool
 	outWriteEnableUsed           bool
-	outWriteEnableBitIndex       uint
+	outWriteEnableBitIndex       uint8
 	stickyOutSetAssertionEnabled bool
 
-	wrapFromAddress uint
-	wrapToAddress   uint
+	wrapFromAddress uint8
+	wrapToAddress   uint8
 
 	statusValueUsesRXFIFO      bool
-	statusValueComparisonLevel uint
-	pullThreshold              uint
-	pushThreshold              uint
+	statusValueComparisonLevel uint8
+	pullThreshold              uint8
+	pushThreshold              uint8
 	outShiftMovesRight         bool
 	inShiftMovesRight          bool
 	autopullEnabled            bool
 	autopushEnabled            bool
 
-	baseSidesetPin  uint
-	bitCountSideset uint
-	baseSetPin      uint
-	pinCountSet     uint
-	baseInPin       uint
-	baseOutPin      uint
-	pinCountOut     uint
-	jumpPin         uint
+	baseSidesetPin  uint8
+	bitCountSideset uint8
+	baseSetPin      uint8
+	pinCountSet     uint8
+	baseInPin       uint8
+	baseOutPin      uint8
+	pinCountOut     uint8
+	jumpPin         uint8
 
-	programCounter           uint
+	programCounter           uint8
 	stalled                  bool
-	jumped                   bool
-	delaysRemaining          uint
+	delaysRemaining          uint8
 	newForcedInstruction     bool
 	forcedInstruction        uint16
 	forcedInstructionStalled bool
@@ -215,9 +214,9 @@ type StateMachine struct {
 	latchedInstruction       uint16
 
 	outputShiftRegister        uint32
-	outputShiftRegisterCounter uint
+	outputShiftRegisterCounter uint8
 	inputShiftRegister         uint32
-	inputShiftRegisterCounter  uint
+	inputShiftRegisterCounter  uint8
 	xRegister                  uint32
 	xRegisterInitialized       bool
 	yRegister                  uint32
@@ -226,11 +225,11 @@ type StateMachine struct {
 	clockDivisorInteger    uint16
 	clockDivisorFractional uint8
 
-	clockDividerTicksRemaining      uint
+	clockDividerTicksRemaining      uint32
 	clockDividerFractionAccumulator uint8
 }
 
-func New(index uint, label string, memoryReader memory.Reader) *StateMachine {
+func New(index uint8, label string, memoryReader memory.Reader) *StateMachine {
 	return &StateMachine{
 		id:    simulation.NewComponentIdentifier(),
 		label: label,
@@ -284,7 +283,6 @@ func New(index uint, label string, memoryReader memory.Reader) *StateMachine {
 
 		programCounter:           0,
 		stalled:                  false,
-		jumped:                   false,
 		delaysRemaining:          0,
 		newForcedInstruction:     false,
 		forcedInstruction:        0,
@@ -318,7 +316,7 @@ func (sm *StateMachine) Observer() Observer {
 	return sm
 }
 
-func (sm *StateMachine) Index() uint { return sm.index }
+func (sm *StateMachine) Index() uint8 { return sm.index }
 
 func (sm *StateMachine) FIFORXObserver() fifo.Observer { return sm.fifoRX.Observer() }
 func (sm *StateMachine) FIFOTXObserver() fifo.Observer { return sm.fifoTX.Observer() }
@@ -337,34 +335,33 @@ func (sm *StateMachine) IRQWritesMask() uint8         { return sm.irqWritesMask 
 func (sm *StateMachine) SidesetIsOptional() bool            { return sm.sidesetIsOptional }
 func (sm *StateMachine) SidesetControlsPinDirection() bool  { return sm.sidesetControlsPinDirection }
 func (sm *StateMachine) OutWriteEnableUsed() bool           { return sm.outWriteEnableUsed }
-func (sm *StateMachine) OutWriteEnableBitIndex() uint       { return sm.outWriteEnableBitIndex }
+func (sm *StateMachine) OutWriteEnableBitIndex() uint8      { return sm.outWriteEnableBitIndex }
 func (sm *StateMachine) StickyOutSetAssertionEnabled() bool { return sm.stickyOutSetAssertionEnabled }
 
-func (sm *StateMachine) WrapFromAddress() uint { return sm.wrapFromAddress }
-func (sm *StateMachine) WrapToAddress() uint   { return sm.wrapToAddress }
+func (sm *StateMachine) WrapFromAddress() uint8 { return sm.wrapFromAddress }
+func (sm *StateMachine) WrapToAddress() uint8   { return sm.wrapToAddress }
 
-func (sm *StateMachine) StatusValueUsesRXFIFO() bool      { return sm.statusValueUsesRXFIFO }
-func (sm *StateMachine) StatusValueComparisonLevel() uint { return sm.statusValueComparisonLevel }
-func (sm *StateMachine) PullThreshold() uint              { return sm.pullThreshold }
-func (sm *StateMachine) PushThreshold() uint              { return sm.pushThreshold }
-func (sm *StateMachine) OutShiftMovesRight() bool         { return sm.outShiftMovesRight }
-func (sm *StateMachine) InShiftMovesRight() bool          { return sm.inShiftMovesRight }
-func (sm *StateMachine) AutopullEnabled() bool            { return sm.autopullEnabled }
-func (sm *StateMachine) AutopushEnabled() bool            { return sm.autopushEnabled }
+func (sm *StateMachine) StatusValueUsesRXFIFO() bool       { return sm.statusValueUsesRXFIFO }
+func (sm *StateMachine) StatusValueComparisonLevel() uint8 { return sm.statusValueComparisonLevel }
+func (sm *StateMachine) PullThreshold() uint8              { return sm.pullThreshold }
+func (sm *StateMachine) PushThreshold() uint8              { return sm.pushThreshold }
+func (sm *StateMachine) OutShiftMovesRight() bool          { return sm.outShiftMovesRight }
+func (sm *StateMachine) InShiftMovesRight() bool           { return sm.inShiftMovesRight }
+func (sm *StateMachine) AutopullEnabled() bool             { return sm.autopullEnabled }
+func (sm *StateMachine) AutopushEnabled() bool             { return sm.autopushEnabled }
 
-func (sm *StateMachine) BaseSidesetPin() uint  { return sm.baseSidesetPin }
-func (sm *StateMachine) BitCountSideset() uint { return sm.bitCountSideset }
-func (sm *StateMachine) BaseSetPin() uint      { return sm.baseSetPin }
-func (sm *StateMachine) PinCountSet() uint     { return sm.pinCountSet }
-func (sm *StateMachine) BaseInPin() uint       { return sm.baseInPin }
-func (sm *StateMachine) BaseOutPin() uint      { return sm.baseOutPin }
-func (sm *StateMachine) PinCountOut() uint     { return sm.pinCountOut }
-func (sm *StateMachine) JumpPin() uint         { return sm.jumpPin }
+func (sm *StateMachine) BaseSidesetPin() uint8  { return sm.baseSidesetPin }
+func (sm *StateMachine) BitCountSideset() uint8 { return sm.bitCountSideset }
+func (sm *StateMachine) BaseSetPin() uint8      { return sm.baseSetPin }
+func (sm *StateMachine) PinCountSet() uint8     { return sm.pinCountSet }
+func (sm *StateMachine) BaseInPin() uint8       { return sm.baseInPin }
+func (sm *StateMachine) BaseOutPin() uint8      { return sm.baseOutPin }
+func (sm *StateMachine) PinCountOut() uint8     { return sm.pinCountOut }
+func (sm *StateMachine) JumpPin() uint8         { return sm.jumpPin }
 
-func (sm *StateMachine) ProgramCounter() uint           { return sm.programCounter }
+func (sm *StateMachine) ProgramCounter() uint8          { return sm.programCounter }
 func (sm *StateMachine) Stalled() bool                  { return sm.stalled }
-func (sm *StateMachine) Jumped() bool                   { return sm.jumped }
-func (sm *StateMachine) DelaysRemaining() uint          { return sm.delaysRemaining }
+func (sm *StateMachine) DelaysRemaining() uint8         { return sm.delaysRemaining }
 func (sm *StateMachine) NewForcedInstruction() bool     { return sm.newForcedInstruction }
 func (sm *StateMachine) ForcedInstruction() uint16      { return sm.forcedInstruction }
 func (sm *StateMachine) ForcedInstructionStalled() bool { return sm.forcedInstructionStalled }
@@ -372,27 +369,27 @@ func (sm *StateMachine) NewEXECdInstruction() bool      { return sm.newEXECdInst
 func (sm *StateMachine) EXECdInstructionStalled() bool  { return sm.execdInstructionStalled }
 func (sm *StateMachine) LatchedInstruction() uint16     { return sm.latchedInstruction }
 
-func (sm *StateMachine) OutputShiftRegister() uint32      { return sm.outputShiftRegister }
-func (sm *StateMachine) OutputShiftRegisterCounter() uint { return sm.outputShiftRegisterCounter }
-func (sm *StateMachine) InputShiftRegister() uint32       { return sm.inputShiftRegister }
-func (sm *StateMachine) InputShiftRegisterCounter() uint  { return sm.inputShiftRegisterCounter }
-func (sm *StateMachine) XRegister() uint32                { return sm.xRegister }
-func (sm *StateMachine) XRegisterInitialized() bool       { return sm.xRegisterInitialized }
-func (sm *StateMachine) YRegister() uint32                { return sm.yRegister }
-func (sm *StateMachine) YRegisterInitialized() bool       { return sm.yRegisterInitialized }
+func (sm *StateMachine) OutputShiftRegister() uint32       { return sm.outputShiftRegister }
+func (sm *StateMachine) OutputShiftRegisterCounter() uint8 { return sm.outputShiftRegisterCounter }
+func (sm *StateMachine) InputShiftRegister() uint32        { return sm.inputShiftRegister }
+func (sm *StateMachine) InputShiftRegisterCounter() uint8  { return sm.inputShiftRegisterCounter }
+func (sm *StateMachine) XRegister() uint32                 { return sm.xRegister }
+func (sm *StateMachine) XRegisterInitialized() bool        { return sm.xRegisterInitialized }
+func (sm *StateMachine) YRegister() uint32                 { return sm.yRegister }
+func (sm *StateMachine) YRegisterInitialized() bool        { return sm.yRegisterInitialized }
 
 func (sm *StateMachine) ClockDivisor() float32 {
 	return clockDivisorToFloat32(sm.clockDivisorInteger, sm.clockDivisorFractional)
 }
-func (sm *StateMachine) ClockDivisorInteger() uint {
+func (sm *StateMachine) ClockDivisorInteger() uint32 {
 	if sm.clockDivisorInteger == 0 {
 		return 65536
 	} else {
-		return uint(sm.clockDivisorInteger)
+		return uint32(sm.clockDivisorInteger)
 	}
 }
-func (sm *StateMachine) ClockDivisorFractional() uint8    { return sm.clockDivisorFractional }
-func (sm *StateMachine) ClockDividerTicksRemaining() uint { return sm.clockDividerTicksRemaining }
+func (sm *StateMachine) ClockDivisorFractional() uint8      { return sm.clockDivisorFractional }
+func (sm *StateMachine) ClockDividerTicksRemaining() uint32 { return sm.clockDividerTicksRemaining }
 func (sm *StateMachine) ClockDividerFractionAccumulator() uint8 {
 	return sm.clockDividerFractionAccumulator
 }
@@ -411,7 +408,7 @@ func (sm *StateMachine) ClearFIFOs() {
 	sm.fifoTX.Clear()
 }
 
-func (sm *StateMachine) Init(programCounter uint) error {
+func (sm *StateMachine) Init(programCounter uint8) error {
 	if programCounter > 31 {
 		return fmt.Errorf("%w: %d, should be < 32", ErrValueOutOfRange, programCounter)
 	}
@@ -458,7 +455,7 @@ func (sm *StateMachine) SetOutWriteEnableUsed(outWriteEnableUsed bool) {
 
 var ErrValueOutOfRange = errors.New("value out of range")
 
-func (sm *StateMachine) SetOutWriteEnableBitIndex(outWriteEnableBitIndex uint) error {
+func (sm *StateMachine) SetOutWriteEnableBitIndex(outWriteEnableBitIndex uint8) error {
 	if outWriteEnableBitIndex > 31 {
 		return fmt.Errorf("%w: %d, should be < 32", ErrValueOutOfRange, outWriteEnableBitIndex)
 	}
@@ -468,14 +465,14 @@ func (sm *StateMachine) SetOutWriteEnableBitIndex(outWriteEnableBitIndex uint) e
 func (sm *StateMachine) SetStickyOutSetAssertionEnabled(stickyOutSetAssertionEnabled bool) {
 	sm.stickyOutSetAssertionEnabled = stickyOutSetAssertionEnabled
 }
-func (sm *StateMachine) SetWrapFromAddress(wrapFromAddress uint) error {
+func (sm *StateMachine) SetWrapFromAddress(wrapFromAddress uint8) error {
 	if wrapFromAddress > 31 {
 		return fmt.Errorf("%w: %d, should be < 32", ErrValueOutOfRange, wrapFromAddress)
 	}
 	sm.wrapFromAddress = wrapFromAddress
 	return nil
 }
-func (sm *StateMachine) SetWrapToAddress(wrapToAddress uint) error {
+func (sm *StateMachine) SetWrapToAddress(wrapToAddress uint8) error {
 	if wrapToAddress > 31 {
 		return fmt.Errorf("%w: %d, should be < 32", ErrValueOutOfRange, wrapToAddress)
 	}
@@ -485,21 +482,21 @@ func (sm *StateMachine) SetWrapToAddress(wrapToAddress uint) error {
 func (sm *StateMachine) SetStatusValueUsesRXFIFO(statusValueUsesRXFIFO bool) {
 	sm.statusValueUsesRXFIFO = statusValueUsesRXFIFO
 }
-func (sm *StateMachine) SetStatusValueComparisonLevel(statusValueComparisonLevel uint) error {
+func (sm *StateMachine) SetStatusValueComparisonLevel(statusValueComparisonLevel uint8) error {
 	if statusValueComparisonLevel > 15 {
 		return fmt.Errorf("%w: %d, should be < 16", ErrValueOutOfRange, statusValueComparisonLevel)
 	}
 	sm.statusValueComparisonLevel = statusValueComparisonLevel
 	return nil
 }
-func (sm *StateMachine) SetPullThreshold(pullThreshold uint) error {
+func (sm *StateMachine) SetPullThreshold(pullThreshold uint8) error {
 	if pullThreshold > 32 || pullThreshold < 1 {
 		return fmt.Errorf("%w: %d, should be >0 and <32", ErrValueOutOfRange, pullThreshold)
 	}
 	sm.pullThreshold = pullThreshold
 	return nil
 }
-func (sm *StateMachine) SetPushThreshold(pushThreshold uint) error {
+func (sm *StateMachine) SetPushThreshold(pushThreshold uint8) error {
 	if pushThreshold > 32 || pushThreshold < 1 {
 		return fmt.Errorf("%w: %d, should be >0 and <32", ErrValueOutOfRange, pushThreshold)
 	}
@@ -518,14 +515,14 @@ func (sm *StateMachine) SetAutopullEnabled(autopullEnabled bool) {
 func (sm *StateMachine) SetAutopushEnabled(autopushEnabled bool) {
 	sm.autopushEnabled = autopushEnabled
 }
-func (sm *StateMachine) SetBaseSidesetPin(baseSidesetPin uint) error {
+func (sm *StateMachine) SetBaseSidesetPin(baseSidesetPin uint8) error {
 	if baseSidesetPin > 31 {
 		return fmt.Errorf("%w: %d, should be < 32", ErrValueOutOfRange, baseSidesetPin)
 	}
 	sm.baseSidesetPin = baseSidesetPin
 	return nil
 }
-func (sm *StateMachine) SetBitCountSideset(bitCountSideset uint) error {
+func (sm *StateMachine) SetBitCountSideset(bitCountSideset uint8) error {
 	if bitCountSideset > 5 {
 		return fmt.Errorf("%w: %d, should be < 6", ErrValueOutOfRange, bitCountSideset)
 	}
@@ -535,42 +532,42 @@ func (sm *StateMachine) SetBitCountSideset(bitCountSideset uint) error {
 	sm.bitCountSideset = bitCountSideset
 	return nil
 }
-func (sm *StateMachine) SetBaseSetPin(baseSetPin uint) error {
+func (sm *StateMachine) SetBaseSetPin(baseSetPin uint8) error {
 	if baseSetPin > 31 {
 		return fmt.Errorf("%w: %d, should be < 32", ErrValueOutOfRange, baseSetPin)
 	}
 	sm.baseSetPin = baseSetPin
 	return nil
 }
-func (sm *StateMachine) SetPinCountSet(pinCountSet uint) error {
+func (sm *StateMachine) SetPinCountSet(pinCountSet uint8) error {
 	if pinCountSet > 5 {
 		return fmt.Errorf("%w: %d, should be < 6", ErrValueOutOfRange, pinCountSet)
 	}
 	sm.pinCountSet = pinCountSet
 	return nil
 }
-func (sm *StateMachine) SetBaseInPin(baseInPin uint) error {
+func (sm *StateMachine) SetBaseInPin(baseInPin uint8) error {
 	if baseInPin > 31 {
 		return fmt.Errorf("%w: %d, should be < 32", ErrValueOutOfRange, baseInPin)
 	}
 	sm.baseInPin = baseInPin
 	return nil
 }
-func (sm *StateMachine) SetBaseOutPin(baseOutPin uint) error {
+func (sm *StateMachine) SetBaseOutPin(baseOutPin uint8) error {
 	if baseOutPin > 31 {
 		return fmt.Errorf("%w: %d, should be < 32", ErrValueOutOfRange, baseOutPin)
 	}
 	sm.baseOutPin = baseOutPin
 	return nil
 }
-func (sm *StateMachine) SetPinCountOut(pinCountOut uint) error {
+func (sm *StateMachine) SetPinCountOut(pinCountOut uint8) error {
 	if pinCountOut > 32 {
 		return fmt.Errorf("%w: %d, should be < 33", ErrValueOutOfRange, pinCountOut)
 	}
 	sm.pinCountOut = pinCountOut
 	return nil
 }
-func (sm *StateMachine) SetJumpPin(jumpPin uint) error {
+func (sm *StateMachine) SetJumpPin(jumpPin uint8) error {
 	if jumpPin > 31 {
 		return fmt.Errorf("%w: %d, should be < 32", ErrValueOutOfRange, jumpPin)
 	}
@@ -578,7 +575,7 @@ func (sm *StateMachine) SetJumpPin(jumpPin uint) error {
 	return nil
 }
 
-type FIFOJoin uint
+type FIFOJoin uint8
 
 const (
 	FIFOJoinNone FIFOJoin = iota
@@ -627,7 +624,7 @@ func (sm *StateMachine) SetClockDivisor(divider float32) error {
 	sm.clockDivisorFractional = divFrac
 	return nil
 }
-func (sm *StateMachine) SetClockDivisorInteger(divInt uint) error {
+func (sm *StateMachine) SetClockDivisorInteger(divInt uint32) error {
 	if divInt < 1 || divInt > 65536 {
 		return fmt.Errorf("%w: %d, should be >0 and <65537", ErrValueOutOfRange, divInt)
 	}
@@ -642,7 +639,7 @@ func (sm *StateMachine) SetClockDivisorFractional(divFrac uint8) {
 	sm.clockDivisorFractional = divFrac
 }
 
-func (sm *StateMachine) SetOutShift(movesRight bool, autopullEnabled bool, pullThreshold uint) error {
+func (sm *StateMachine) SetOutShift(movesRight bool, autopullEnabled bool, pullThreshold uint8) error {
 	sm.SetOutShiftMovesRight(movesRight)
 	sm.SetAutopullEnabled(autopullEnabled)
 	err := sm.SetPullThreshold(pullThreshold)
@@ -652,7 +649,7 @@ func (sm *StateMachine) SetOutShift(movesRight bool, autopullEnabled bool, pullT
 	return nil
 }
 
-func (sm *StateMachine) SetInShift(movesRight bool, autopushEnabled bool, pushThreshold uint) error {
+func (sm *StateMachine) SetInShift(movesRight bool, autopushEnabled bool, pushThreshold uint8) error {
 	sm.SetInShiftMovesRight(movesRight)
 	sm.SetAutopushEnabled(autopushEnabled)
 	err := sm.SetPushThreshold(pushThreshold)
@@ -662,7 +659,7 @@ func (sm *StateMachine) SetInShift(movesRight bool, autopushEnabled bool, pushTh
 	return nil
 }
 
-func (sm *StateMachine) SetSideset(bitCountSideset uint, sidesetIsOptional bool, sidesetControlsPinDirection bool) error {
+func (sm *StateMachine) SetSideset(bitCountSideset uint8, sidesetIsOptional bool, sidesetControlsPinDirection bool) error {
 	if bitCountSideset > 5 {
 		return fmt.Errorf("bit count sideset %w: %d, should be < 6", ErrValueOutOfRange, bitCountSideset)
 	}
@@ -675,7 +672,7 @@ func (sm *StateMachine) SetSideset(bitCountSideset uint, sidesetIsOptional bool,
 	return nil
 }
 
-func (sm *StateMachine) SetWrap(wrapToAddress uint, wrapFromAddress uint) error {
+func (sm *StateMachine) SetWrap(wrapToAddress uint8, wrapFromAddress uint8) error {
 	err := sm.SetWrapToAddress(wrapToAddress)
 	if err != nil {
 		return fmt.Errorf("error setting wrap to address: %w", err)
@@ -719,12 +716,11 @@ func (sm *StateMachine) Tick() error {
 	sm.irqWritesMask = 0
 
 	if sm.newForcedInstruction {
-		jumped, stalled, err := sm.execute(sm.forcedInstruction, false)
+		_, stalled, err := sm.execute(sm.forcedInstruction, false)
 		if err != nil {
 			return fmt.Errorf("error executing forced instruction %016b: %w", sm.forcedInstruction, err)
 		}
 		sm.newForcedInstruction = false
-		sm.jumped = jumped
 		sm.forcedInstructionStalled = stalled
 		if sm.forcedInstructionStalled {
 			if sm.newEXECdInstruction || sm.execdInstructionStalled {
@@ -733,11 +729,10 @@ func (sm *StateMachine) Tick() error {
 			sm.latchedInstruction = sm.forcedInstruction
 		}
 	} else if sm.forcedInstructionStalled {
-		jumped, stalled, err := sm.execute(sm.latchedInstruction, true)
+		_, stalled, err := sm.execute(sm.latchedInstruction, true)
 		if err != nil {
 			return fmt.Errorf("error executing stalled forced instruction %016b: %w", sm.latchedInstruction, err)
 		}
-		sm.jumped = jumped
 		sm.forcedInstructionStalled = stalled
 	} else if sm.clockDividerTicksRemaining == 0 && sm.enabled {
 		err := sm.dividedTick()
@@ -757,19 +752,17 @@ func (sm *StateMachine) Tick() error {
 
 func (sm *StateMachine) dividedTick() error {
 	if sm.newEXECdInstruction {
-		jumped, stalled, err := sm.execute(sm.latchedInstruction, false)
+		_, stalled, err := sm.execute(sm.latchedInstruction, false)
 		if err != nil {
 			return fmt.Errorf("error executing EXEC'd instruction %016b: %w", sm.latchedInstruction, err)
 		}
 		sm.newEXECdInstruction = false
-		sm.jumped = jumped
 		sm.execdInstructionStalled = stalled
 	} else if sm.execdInstructionStalled {
-		jumped, stalled, err := sm.execute(sm.latchedInstruction, true)
+		_, stalled, err := sm.execute(sm.latchedInstruction, true)
 		if err != nil {
 			return fmt.Errorf("error executing stalled EXEC'd instruction %016b: %w", sm.latchedInstruction, err)
 		}
-		sm.jumped = jumped
 		sm.execdInstructionStalled = stalled
 	} else if sm.stalled {
 		instr, err := sm.memoryReader.Read(sm.programCounter)
@@ -783,7 +776,6 @@ func (sm *StateMachine) dividedTick() error {
 		if !jumped && !stalled {
 			sm.incrementProgramCounter()
 		}
-		sm.jumped = jumped
 		sm.stalled = stalled
 	} else if sm.delaysRemaining > 0 {
 		sm.delaysRemaining--
@@ -799,7 +791,6 @@ func (sm *StateMachine) dividedTick() error {
 		if !jumped && !stalled {
 			sm.incrementProgramCounter()
 		}
-		sm.jumped = jumped
 		sm.stalled = stalled
 	}
 	return nil
@@ -808,72 +799,264 @@ func (sm *StateMachine) dividedTick() error {
 var ErrInstructionTypeInvalid = errors.New("instruction type invalid")
 
 func (sm *StateMachine) execute(instr uint16, currentlyStalled bool) (jumped bool, stalled bool, err error) {
-	instructionType := instruction((instr >> 13) & 0b111)
-
-	switch instructionType {
-	case instructionJump:
-		jumped, err = sm.executeJump(condition, address)
+	switch instruction.DecodeType(instr) {
+	case instruction.TypeJump:
+		j := instruction.DecodeJump(instr)
+		output, err := ExecuteJump(j, JumpInput{
+			JumpPin:                    sm.jumpPin,
+			OutputShiftRegisterCounter: sm.outputShiftRegisterCounter,
+			PinInputs:                  sm.pinInputs,
+			PullThreshold:              sm.pullThreshold,
+			XRegister:                  sm.xRegister,
+			XRegisterInitialized:       sm.xRegisterInitialized,
+			YRegister:                  sm.yRegister,
+			YRegisterInitialized:       sm.yRegisterInitialized,
+		})
 		if err != nil {
 			return false, false, fmt.Errorf("jump: %w", err)
 		}
-	case instructionWait:
-		polarity := (instr>>7)&0b1 == 1
-		source := waitSource((instr >> 5) & 0b11)
-		index := uint(instr & 0b11111)
-		stalled, err = sm.executeWait(polarity, source, index)
+		if output.DecrementXRegister {
+			sm.xRegister--
+		}
+		if output.DecrementYRegister {
+			sm.yRegister--
+		}
+		if output.Jumped {
+			jumped = true
+			sm.programCounter = output.NewProgramCounter
+		}
+	case instruction.TypeWait:
+		w := instruction.DecodeWait(instr)
+		output, err := ExecuteWait(w, WaitInput{
+			BaseInPin:         sm.baseInPin,
+			IRQInputs:         sm.irqInputs,
+			PinInputs:         sm.pinInputs,
+			StateMachineIndex: sm.index,
+		})
 		if err != nil {
 			return false, false, fmt.Errorf("wait: %w", err)
 		}
-	case instructionIn:
-		source := inSource((instr >> 5) & 0b111)
-		numberOfBits := uint(instr & 0b11111)
-		if numberOfBits == 0 {
-			numberOfBits = 32
+		if output.ClearIRQsMask != 0 {
+			sm.irqWrites &= ^output.ClearIRQsMask
+			sm.irqWritesMask |= output.ClearIRQsMask
 		}
-		stalled, err = sm.executeIn(source, numberOfBits, currentlyStalled)
+		if output.ShouldStall {
+			stalled = true
+		}
+	case instruction.TypeIn:
+		i := instruction.DecodeIn(instr)
+		output, err := ExecuteIn(i, InInput{
+			AlreadyStalled:            currentlyStalled,
+			AutopushEnabled:           sm.autopushEnabled,
+			BaseInPin:                 sm.baseInPin,
+			InShiftMovesRight:         sm.inShiftMovesRight,
+			InputShiftRegister:        sm.inputShiftRegister,
+			InputShiftRegisterCounter: sm.inputShiftRegisterCounter,
+			OutputShiftRegister:       sm.outputShiftRegister,
+			PinInputs:                 sm.pinInputs,
+			PushThreshold:             sm.pushThreshold,
+			XRegister:                 sm.xRegister,
+			XRegisterInitialized:      sm.xRegisterInitialized,
+			YRegister:                 sm.yRegister,
+			YRegisterInitialized:      sm.yRegisterInitialized,
+
+			FIFORX: sm.fifoRX,
+		})
 		if err != nil {
 			return false, false, fmt.Errorf("in: %w", err)
 		}
-	case instructionOut:
-		destination := outDestination((instr >> 5) & 0b111)
-		numberOfBits := uint(instr & 0b11111)
-		if numberOfBits == 0 {
-			numberOfBits = 32
+		sm.inputShiftRegister = output.NewInputShiftRegister
+		sm.inputShiftRegisterCounter = output.NewInputShiftRegisterCounter
+		if output.ShouldStall {
+			stalled = true
 		}
-		jumped, stalled, err = sm.executeOut(destination, numberOfBits)
+	case instruction.TypeOut:
+		o := instruction.DecodeOut(instr)
+		output, err := ExecuteOut(o, OutInput{
+			AutopullEnabled:              sm.autopullEnabled,
+			BaseOutPin:                   sm.baseOutPin,
+			OutShiftMovesRight:           sm.outShiftMovesRight,
+			OutWriteEnableBitIndex:       sm.outWriteEnableBitIndex,
+			OutWriteEnableUsed:           sm.outWriteEnableUsed,
+			OutputShiftRegister:          sm.outputShiftRegister,
+			OutputShiftRegisterCounter:   sm.outputShiftRegisterCounter,
+			PinCountOut:                  sm.pinCountOut,
+			PullThreshold:                sm.pullThreshold,
+			StickyOutSetAssertionEnabled: sm.stickyOutSetAssertionEnabled,
+
+			FIFOTX: sm.fifoTX,
+		})
 		if err != nil {
 			return false, false, fmt.Errorf("out: %w", err)
 		}
-	case instructionPushPull:
-		isPull := (instr>>7)&0b1 == 1
-		ifThreshold := (instr>>6)&0b1 == 1
-		block := (instr>>5)&0b1 == 1
-		stalled, err = sm.executePushOrPull(isPull, ifThreshold, block)
+		if output.NewEXECdInstruction {
+			sm.newEXECdInstruction = true
+			sm.latchedInstruction = output.EXECdInstruction
+		}
+		if output.Jumped {
+			jumped = true
+			sm.programCounter = output.NewProgramCounter
+		}
+		if output.WrittenToInputShiftRegister {
+			sm.inputShiftRegister = output.NewInputShiftRegister
+			sm.inputShiftRegisterCounter = output.NewInputShiftRegisterCounter
+		}
+		sm.outputShiftRegister = output.NewOutputShiftRegister
+		sm.outputShiftRegisterCounter = output.NewOutputShiftRegisterCounter
+		if output.NewPinOutputEnablesMask != 0 {
+			sm.pinOutputEnables &= ^output.NewPinOutputEnablesMask
+			sm.pinOutputEnables |= output.NewPinOutputEnables
+			sm.pinOutputEnablesMask |= output.NewPinOutputEnablesMask
+		}
+		if output.NewPinOutputsMask != 0 {
+			sm.pinOutputs &= ^output.NewPinOutputsMask
+			sm.pinOutputs |= output.NewPinOutputs
+			sm.pinOutputsMask |= output.NewPinOutputsMask
+		}
+		if output.WrittenToXRegister {
+			sm.xRegister = output.NewXRegister
+			sm.xRegisterInitialized = true
+		}
+		if output.WrittenToYRegister {
+			sm.yRegister = output.NewYRegister
+			sm.yRegisterInitialized = true
+		}
+		if output.ShouldStall {
+			stalled = true
+		}
+	case instruction.TypePushPull:
+		pp := instruction.DecodePushPull(instr)
+		output, err := ExecutePushPull(pp, PushPullInput{
+			AutopullEnabled:            sm.autopullEnabled,
+			InputShiftRegister:         sm.inputShiftRegister,
+			InputShiftRegisterCounter:  sm.inputShiftRegisterCounter,
+			OutputShiftRegister:        sm.outputShiftRegister,
+			OutputShiftRegisterCounter: sm.outputShiftRegisterCounter,
+			PullThreshold:              sm.pullThreshold,
+			PushThreshold:              sm.pushThreshold,
+			XRegister:                  sm.xRegister,
+			XRegisterInitialized:       sm.xRegisterInitialized,
+
+			FIFOTX: sm.fifoTX,
+			FIFORX: sm.fifoRX,
+		})
 		if err != nil {
 			return false, false, fmt.Errorf("push/pull: %w", err)
 		}
-	case instructionMove:
-		destination := moveDestination((instr >> 5) & 0b111)
-		operation := moveOperation((instr >> 3) & 0b11)
-		source := moveSource(instr & 0b111)
-		jumped, err = sm.executeMove(destination, operation, source)
+		sm.inputShiftRegister = output.NewInputShiftRegister
+		sm.inputShiftRegisterCounter = output.NewInputShiftRegisterCounter
+		sm.outputShiftRegister = output.NewOutputShiftRegister
+		sm.outputShiftRegisterCounter = output.NewOutputShiftRegisterCounter
+		if output.ShouldStall {
+			stalled = true
+		}
+	case instruction.TypeMove:
+		m := instruction.DecodeMove(instr)
+		output, err := ExecuteMove(m, MoveInput{
+			AutopullEnabled:              sm.autopullEnabled,
+			BaseInPin:                    sm.baseInPin,
+			BaseOutPin:                   sm.baseOutPin,
+			InputShiftRegister:           sm.inputShiftRegister,
+			OutWriteEnableBitIndex:       sm.outWriteEnableBitIndex,
+			OutWriteEnableUsed:           sm.outWriteEnableUsed,
+			OutputShiftRegister:          sm.outputShiftRegister,
+			PinCountOut:                  sm.pinCountOut,
+			PinInputs:                    sm.pinInputs,
+			StatusValueComparisonLevel:   sm.statusValueComparisonLevel,
+			StatusValueUsesRXFIFO:        sm.statusValueUsesRXFIFO,
+			StickyOutSetAssertionEnabled: sm.stickyOutSetAssertionEnabled,
+			XRegister:                    sm.xRegister,
+			XRegisterInitialized:         sm.xRegisterInitialized,
+			YRegister:                    sm.yRegister,
+			YRegisterInitialized:         sm.yRegisterInitialized,
+
+			FIFORX: sm.fifoRX,
+			FIFOTX: sm.fifoTX,
+		})
 		if err != nil {
 			return false, false, fmt.Errorf("move: %w", err)
 		}
-	case instructionIRQ:
-		clearIRQ := (instr>>6)&0b1 == 1
-		waitIRQ := (instr>>5)&0b1 == 1
-		index := uint(instr & 0b11111)
-		stalled, err = sm.executeIRQ(clearIRQ, waitIRQ, index, currentlyStalled)
+		if output.NewEXECdInstruction {
+			sm.newEXECdInstruction = true
+			sm.latchedInstruction = output.EXECdInstruction
+		}
+		if output.Jumped {
+			jumped = true
+			sm.programCounter = output.NewProgramCounter
+		}
+		if output.WrittenToInputShiftRegister {
+			sm.inputShiftRegister = output.NewInputShiftRegister
+			sm.inputShiftRegisterCounter = output.NewInputShiftRegisterCounter
+		}
+		if output.WrittenToOutputShiftRegister {
+			sm.outputShiftRegister = output.NewOutputShiftRegister
+			sm.outputShiftRegisterCounter = output.NewOutputShiftRegisterCounter
+		}
+		if output.NewPinOutputEnablesMask != 0 {
+			sm.pinOutputEnables &= ^output.NewPinOutputEnablesMask
+			sm.pinOutputEnables |= output.NewPinOutputEnables
+			sm.pinOutputEnablesMask |= output.NewPinOutputEnablesMask
+		}
+		if output.NewPinOutputsMask != 0 {
+			sm.pinOutputs &= ^output.NewPinOutputsMask
+			sm.pinOutputs |= output.NewPinOutputs
+			sm.pinOutputsMask |= output.NewPinOutputsMask
+		}
+		if output.WrittenToXRegister {
+			sm.xRegister = output.NewXRegister
+			sm.xRegisterInitialized = true
+		}
+		if output.WrittenToYRegister {
+			sm.yRegister = output.NewYRegister
+			sm.yRegisterInitialized = true
+		}
+	case instruction.TypeIRQ:
+		i := instruction.DecodeIRQ(instr)
+		output, err := ExecuteIRQ(i, IRQInput{
+			AlreadyStalled:    currentlyStalled,
+			IRQInputs:         sm.irqInputs,
+			StateMachineIndex: sm.index,
+		})
 		if err != nil {
 			return false, false, fmt.Errorf("irq: %w", err)
 		}
-	case instructionSet:
-		destination := setDestination((instr >> 5) & 0b111)
-		data := uint(instr & 0b11111)
-		err := sm.executeSet(destination, data)
+		if output.ClearIRQsMask != 0 {
+			sm.irqWrites &= ^output.ClearIRQsMask
+			sm.irqWritesMask |= output.ClearIRQsMask
+		}
+		if output.SetIRQsMask != 0 {
+			sm.irqWrites |= output.SetIRQsMask
+			sm.irqWritesMask |= output.SetIRQsMask
+		}
+		if output.ShouldStall {
+			stalled = true
+		}
+	case instruction.TypeSet:
+		s := instruction.DecodeSet(instr)
+		output, err := ExecuteSet(s, SetInput{
+			BaseSetPin:  sm.baseSetPin,
+			PinCountSet: sm.pinCountSet,
+		})
 		if err != nil {
 			return false, false, fmt.Errorf("set: %w", err)
+		}
+		if output.NewPinOutputEnablesMask != 0 {
+			sm.pinOutputEnables &= ^output.NewPinOutputEnablesMask
+			sm.pinOutputEnables |= output.NewPinOutputEnables
+			sm.pinOutputEnablesMask |= output.NewPinOutputEnablesMask
+		}
+		if output.NewPinOutputsMask != 0 {
+			sm.pinOutputs &= ^output.NewPinOutputsMask
+			sm.pinOutputs |= output.NewPinOutputs
+			sm.pinOutputsMask |= output.NewPinOutputsMask
+		}
+		if output.WrittenToXRegister {
+			sm.xRegister = output.NewXRegister
+			sm.xRegisterInitialized = true
+		}
+		if output.WrittenToYRegister {
+			sm.yRegister = output.NewYRegister
+			sm.yRegisterInitialized = true
 		}
 	default:
 		return false, false, ErrInstructionTypeInvalid
@@ -888,31 +1071,20 @@ func (sm *StateMachine) execute(instr uint16, currentlyStalled bool) (jumped boo
 		sm.outputShiftRegisterCounter = 0
 	}
 
-	delaySidesetData := (instr >> 8) & 0b11111
-
-	var delayMask uint16 = (0b1 << (5 - sm.bitCountSideset)) - 1
-	var sidesetMask = ^delayMask
-	if sm.sidesetIsOptional {
-		sidesetMask &= 0b01111
-	}
-
-	doSideset := (sm.bitCountSideset > 0) && (!sm.sidesetIsOptional || ((delaySidesetData>>4)&0b1 == 1))
-	if doSideset {
-		sidesetData := (delaySidesetData & sidesetMask) >> (5 - sm.bitCountSideset)
-		pinCount := sm.bitCountSideset
+	if sm.bitCountSideset > 0 {
+		pinCountSideset := sm.bitCountSideset
 		if sm.sidesetIsOptional {
-			pinCount -= 1
+			pinCountSideset -= 1
 		}
-		var pinData = bits.RotateLeft32(uint32(sidesetData), int(sm.baseSidesetPin))
-		var pinMask = bits.RotateLeft32((0b1<<pinCount)-1, int(sm.baseSidesetPin))
-		sm.pinSidesets = pinData
-		sm.pinSidesetsMask = pinMask
+		ss := instruction.DecodeSideset(instr, pinCountSideset, sm.sidesetIsOptional)
+		sidesetData := ss.Data()
+		sm.pinSidesets = bits.RotateLeft32(uint32(sidesetData), int(sm.baseSidesetPin))
+		sm.pinSidesetsMask = bits.RotateLeft32((0b1<<pinCountSideset)-1, int(sm.baseSidesetPin))
 	}
 
-	doDelay := (sm.bitCountSideset < 5) && !sm.newForcedInstruction
-	if doDelay {
-		delayData := (delaySidesetData & delayMask)
-		sm.delaysRemaining = uint(delayData)
+	if (sm.bitCountSideset < 5) && !sm.newForcedInstruction {
+		d := instruction.DecodeDelay(instr, sm.bitCountSideset)
+		sm.delaysRemaining = d.Cycles()
 	} else {
 		sm.delaysRemaining = 0
 	}
@@ -930,28 +1102,3 @@ func (sm *StateMachine) incrementProgramCounter() {
 
 var ErrXRegisterNotInitialized = errors.New("x register not initialized")
 var ErrYRegisterNotInitialized = errors.New("y register not initialized")
-
-func (sm *StateMachine) executeJump(condition jumpCondition, address uint) (jumped bool, err error) {
-}
-
-func (sm *StateMachine) executeWait(polarity bool, source waitSource, index uint) (stalled bool, err error) {
-}
-
-func (sm *StateMachine) executeIn(source inSource, count uint, currentlyStalled bool) (stalled bool, err error) {
-}
-
-func (sm *StateMachine) executeOut(destination outDestination, count uint) (jumped bool, stalled bool, err error) {
-}
-
-func (sm *StateMachine) executePushOrPull(isPull bool, ifThreshold bool, block bool) (stalled bool, err error) {
-}
-
-func (sm *StateMachine) executeMove(destination moveDestination, operation moveOperation, source moveSource) (jumped bool, err error) {
-}
-
-func (sm *StateMachine) executeIRQ(clearIRQ bool, waitIRQ bool, index uint, currentlyStalled bool) (stalled bool, err error) {
-
-}
-
-func (sm *StateMachine) executeSet(destination setDestination, data uint) error {
-}

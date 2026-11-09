@@ -1,6 +1,6 @@
 package instruction
 
-const InstructionTypePushPull Type = 0b100
+const TypePushPull Type = 0b100
 
 type PushPull struct {
 	isPull      bool
@@ -29,7 +29,7 @@ func DecodePushPull(instr uint16) PushPull {
 }
 
 func (p PushPull) Encode() uint16 {
-	var encoded uint16 = uint16(InstructionTypePushPull) << 13
+	var encoded uint16 = uint16(TypePushPull) << 13
 	if p.isPull {
 		encoded |= 0b1 << 7
 	}

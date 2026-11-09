@@ -1,6 +1,6 @@
 package instruction
 
-const InstructionTypeWait Type = 0b001
+const TypeWait Type = 0b001
 
 type WaitSource uint8
 
@@ -37,7 +37,7 @@ func DecodeWait(instr uint16) Wait {
 }
 
 func (w Wait) Encode() uint16 {
-	var encoded uint16 = uint16(InstructionTypeWait)<<13 | uint16(w.source)<<5 | uint16(w.index)
+	var encoded uint16 = uint16(TypeWait)<<13 | uint16(w.source)<<5 | uint16(w.index)
 	if w.polarity {
 		encoded |= 0b1 << 7
 	}

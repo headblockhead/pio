@@ -7,16 +7,26 @@ import (
 )
 
 type IRQInput struct {
-	SMIndex        uint8
-	AlreadyStalled bool
-	IRQInputs      uint8
+	AlreadyStalled    bool
+	IRQInputs         uint8
+	StateMachineIndex uint8
 }
 
 type IRQOutput struct {
-	ShouldStall    bool
-	ShouldClearIRQ bool
-	ShouldSetIRQ   bool
-	IRQIndex       uint8
+	ClearIRQsMask uint8
+	SetIRQsMask   uint8
+	ShouldStall   bool
+}
+
+func GetIRQIndex(index uint8, stateMachineIndex uint8) uint8 {
+	relative := (index>>4)&0b1 == 1
+	irq := index & 0b111
+	if relative {
+		upperBit := irq & 0b100
+		lowerBits := (irq + stateMachineIndex) & 0b011
+		irq = upperBit | lowerBits
+	}
+	return irq
 }
 
 var ErrCannotBothClearAndWaitOnAnIRQ = errors.New("cannot both clear and wait on an IRQ")
@@ -24,27 +34,20 @@ var ErrCannotBothClearAndWaitOnAnIRQ = errors.New("cannot both clear and wait on
 func ExecuteIRQ(instr instruction.IRQ, input IRQInput) (IRQOutput, error) {
 	var output IRQOutput
 
-	relative := (instr.Index()>>4)&0b1 == 1
-	irq := instr.Index() & 0b111
-	if relative {
-		upperBit := irq & 0b100
-		lowerBits := (irq + input.SMIndex) & 0b011
-		irq = upperBit | lowerBits
-	}
+	irq := GetIRQIndex(instr.Index(), input.StateMachineIndex)
 
 	if input.AlreadyStalled {
 		output.ShouldStall = ((input.IRQInputs >> irq) & 0b1) == 1
 		return output, nil
 	}
 
-	output.IRQIndex = irq
 	if instr.Clear() {
 		if instr.Wait() {
 			return output, ErrCannotBothClearAndWaitOnAnIRQ
 		}
-		output.ShouldClearIRQ = true
+		output.ClearIRQsMask = 0b1 << irq
 	} else {
-		output.ShouldSetIRQ = true
+		output.SetIRQsMask = 0b1 << irq
 		if instr.Wait() {
 			output.ShouldStall = true
 		}

@@ -7,12 +7,14 @@ import (
 )
 
 type JumpInput struct {
-	XRegister                   uint32
-	XRegisterInitialized        bool
-	YRegister                   uint32
-	YRegisterInitialized        bool
-	JumpPinValue                bool
-	OutputShiftRegisterNotEmpty bool
+	JumpPin                    uint8
+	OutputShiftRegisterCounter uint8
+	PinInputs                  uint32
+	PullThreshold              uint8
+	XRegister                  uint32
+	XRegisterInitialized       bool
+	YRegister                  uint32
+	YRegisterInitialized       bool
 }
 
 type JumpOutput struct {
@@ -64,9 +66,9 @@ func ExecuteJump(instr instruction.Jump, input JumpInput) (JumpOutput, error) {
 		}
 		shouldJump = (input.XRegister != input.YRegister)
 	case instruction.JumpPin:
-		shouldJump = input.JumpPinValue
+		shouldJump = (input.PinInputs>>input.JumpPin)&0b1 == 1
 	case instruction.JumpOSRENotEmpty:
-		shouldJump = input.OutputShiftRegisterNotEmpty
+		shouldJump = input.OutputShiftRegisterCounter < input.PullThreshold
 	default:
 		return output, ErrJumpConditionInvalid
 	}

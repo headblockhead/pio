@@ -9,33 +9,33 @@ import (
 
 type PushPullInput struct {
 	AutopullEnabled            bool
-	OutputShiftRegister        uint32
-	OutputShiftRegisterCounter uint8
-	XRegisterInitialized       bool
-	XRegister                  uint32
-	PullThreshold              uint8
 	InputShiftRegister         uint32
 	InputShiftRegisterCounter  uint8
+	OutputShiftRegister        uint32
+	OutputShiftRegisterCounter uint8
+	PullThreshold              uint8
 	PushThreshold              uint8
+	XRegister                  uint32
+	XRegisterInitialized       bool
 
 	FIFOTX fifo.Reader
 	FIFORX fifo.Writer
 }
 
 type PushPullOutput struct {
-	ShouldStall                   bool
-	NewOutputShiftRegister        uint32
-	NewOutputShiftRegisterCounter uint8
 	NewInputShiftRegister         uint32
 	NewInputShiftRegisterCounter  uint8
+	NewOutputShiftRegister        uint32
+	NewOutputShiftRegisterCounter uint8
+	ShouldStall                   bool
 }
 
 func ExecutePushPull(instr instruction.PushPull, input PushPullInput) (PushPullOutput, error) {
 	var output PushPullOutput = PushPullOutput{
-		NewOutputShiftRegister:        input.OutputShiftRegister,
-		NewOutputShiftRegisterCounter: input.OutputShiftRegisterCounter,
 		NewInputShiftRegister:         input.InputShiftRegister,
 		NewInputShiftRegisterCounter:  input.InputShiftRegisterCounter,
+		NewOutputShiftRegister:        input.OutputShiftRegister,
+		NewOutputShiftRegisterCounter: input.OutputShiftRegisterCounter,
 	}
 
 	if instr.IsPull() {

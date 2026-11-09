@@ -26,14 +26,14 @@ func clockDivisorToFloat32(divisorInteger uint16, divisorFractional uint8) float
 	return float32(divisorInteger) + (float32(divisorFractional) / 256)
 }
 
-func clockDividerUpdateTicksRemaining(dividerFractionAccumulator uint8, divisorInteger uint16, divisorFractional uint8) (newDividerTicksRemaining uint, newDividerFractionAccumulator uint8) {
-	var actualDivisorInteger uint
+func clockDividerUpdateTicksRemaining(dividerFractionAccumulator uint8, divisorInteger uint16, divisorFractional uint8) (newDividerTicksRemaining uint32, newDividerFractionAccumulator uint8) {
+	var actualDivisorInteger uint32
 	// clockDivisorInteger as 0 represents a divisor of 65536, as dividing by 0 is not a useful operation.
 	if divisorInteger == 0 {
 		actualDivisorInteger = 65536
 		divisorFractional = 0
 	} else {
-		actualDivisorInteger = uint(divisorInteger)
+		actualDivisorInteger = uint32(divisorInteger)
 	}
 
 	// Setup the amount of ticks to count until the next divided tick based on the integer divisor.

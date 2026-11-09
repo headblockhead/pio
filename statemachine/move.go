@@ -9,40 +9,33 @@ import (
 )
 
 type MoveInput struct {
-	PinInputs                    uint32
-	BaseInPin                    uint8
-	XRegisterInitialized         bool
-	XRegister                    uint32
-	YRegisterInitialized         bool
-	YRegister                    uint32
-	StatusValueUsesRXFIFO        bool
-	StatusValueComparisonLevel   uint
-	InputShiftRegister           uint32
-	OutputShiftRegister          uint32
 	AutopullEnabled              bool
-	OutWriteEnableUsed           bool
-	OutWriteEnableBitIndex       uint8
-	StickyOutSetAssertionEnabled bool
-	PinCountOut                  uint8
+	BaseInPin                    uint8
 	BaseOutPin                   uint8
+	InputShiftRegister           uint32
+	OutWriteEnableBitIndex       uint8
+	OutWriteEnableUsed           bool
+	OutputShiftRegister          uint32
+	PinCountOut                  uint8
+	PinInputs                    uint32
+	StatusValueComparisonLevel   uint8
+	StatusValueUsesRXFIFO        bool
+	StickyOutSetAssertionEnabled bool
+	XRegister                    uint32
+	XRegisterInitialized         bool
+	YRegister                    uint32
+	YRegisterInitialized         bool
 
 	FIFORX fifo.Writer
 	FIFOTX fifo.Reader
 }
 
 type MoveOutput struct {
-	NewPinOutputEnables     uint32
-	NewPinOutputEnablesMask uint32
-	NewPinOutputs           uint32
-	NewPinOutputsMask       uint32
-	WrittenToXRegister      bool
-	NewXRegister            uint32
-	WrittenToYRegister      bool
-	NewYRegister            uint32
-	NewEXECdInstruction     bool
-	EXECdInstruction        uint16
-	Jumped                  bool
-	ProgramCounter          uint
+	NewEXECdInstruction bool
+	EXECdInstruction    uint16
+
+	Jumped            bool
+	NewProgramCounter uint8
 
 	WrittenToInputShiftRegister  bool
 	NewInputShiftRegister        uint32
@@ -51,6 +44,15 @@ type MoveOutput struct {
 	WrittenToOutputShiftRegister  bool
 	NewOutputShiftRegister        uint32
 	NewOutputShiftRegisterCounter uint8
+
+	NewPinOutputEnables     uint32
+	NewPinOutputEnablesMask uint32
+	NewPinOutputs           uint32
+	NewPinOutputsMask       uint32
+	WrittenToXRegister      bool
+	NewXRegister            uint32
+	WrittenToYRegister      bool
+	NewYRegister            uint32
 }
 
 var ErrMoveSourceInvalid = errors.New("move source invalid")
@@ -84,7 +86,7 @@ func ExecuteMove(instr instruction.Move, input MoveInput) (MoveOutput, error) {
 		} else {
 			fifoLevel = input.FIFOTX.Level()
 		}
-		if fifoLevel < input.StatusValueComparisonLevel {
+		if uint8(fifoLevel) < input.StatusValueComparisonLevel {
 			sourceData = 0xFFFFFFFF
 		} else {
 			sourceData = 0x00000000
@@ -145,7 +147,7 @@ func ExecuteMove(instr instruction.Move, input MoveInput) (MoveOutput, error) {
 		output.EXECdInstruction = uint16(modifiedData)
 	case instruction.MoveDestinationPC:
 		output.Jumped = true
-		output.ProgramCounter = uint(modifiedData % 32)
+		output.NewProgramCounter = uint8(modifiedData % 32)
 	case instruction.MoveDestinationISR:
 		output.WrittenToInputShiftRegister = true
 		output.NewInputShiftRegister = modifiedData

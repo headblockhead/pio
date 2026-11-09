@@ -1,6 +1,6 @@
 package instruction
 
-const InstructionTypeSet Type = 0b111
+const TypeSet Type = 0b111
 
 type SetDestination uint8
 
@@ -34,5 +34,5 @@ func DecodeSet(instruction uint16) Set {
 }
 
 func (s Set) Encode() uint16 {
-	return uint16(InstructionTypeSet)<<13 | uint16(s.destination)<<5 | uint16(s.data)
+	return uint16(TypeSet)<<13 | uint16(s.destination)<<5 | uint16(s.data)
 }

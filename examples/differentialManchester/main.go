@@ -28,8 +28,8 @@ var programTX = memory.NewProgramWithOrigin([]uint16{
 	//     .wrap
 }, 0)
 
-const programTXWrapFrom = 9
-const programTXWrapTo = 0
+const programTXWrapFrom uint8 = 9
+const programTXWrapTo uint8 = 0
 
 var programRX = memory.NewProgramWithOrigin([]uint16{
 	0x2ba0, //  0: wait   1 pin, 0               [11]
@@ -46,8 +46,8 @@ var programRX = memory.NewProgramWithOrigin([]uint16{
 	//     .wrap
 }, 0)
 
-const programRXWrapFrom = 9
-const programRXWrapTo = 5
+const programRXWrapFrom uint8 = 9
+const programRXWrapTo uint8 = 5
 
 // Errors are ignored throughout this example to help readability.
 // Where errors are ignored, an underscore is used to demonstrate that the return value is intentionally not used.
@@ -134,7 +134,7 @@ func main() {
 }
 
 func setupA(r *pio.RP2040) {
-	var aPin uint = 2
+	var aPin uint8 = 2
 	pio0, _ := r.PIO(0)
 
 	mw := pio0.MemoryWriter()
@@ -164,7 +164,7 @@ func setupA(r *pio.RP2040) {
 }
 
 func setupB(r *pio.RP2040) {
-	var bPin uint = 5
+	var bPin uint8 = 5
 	pio0, _ := r.PIO(0)
 
 	mw := pio0.MemoryWriter()

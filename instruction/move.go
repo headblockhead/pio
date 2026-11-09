@@ -1,6 +1,6 @@
 package instruction
 
-const InstructionTypeMove Type = 0b101
+const TypeMove Type = 0b101
 
 type MoveDestination uint8
 type MoveOperation uint8
@@ -55,5 +55,5 @@ func DecodeMove(instr uint16) Move {
 }
 
 func (m Move) Encode() uint16 {
-	return uint16(InstructionTypeMove)<<13 | uint16(m.destination)<<5 | uint16(m.operation)<<3 | uint16(m.source)
+	return uint16(TypeMove)<<13 | uint16(m.destination)<<5 | uint16(m.operation)<<3 | uint16(m.source)
 }

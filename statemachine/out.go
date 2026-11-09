@@ -11,23 +11,32 @@ import (
 
 type OutInput struct {
 	AutopullEnabled              bool
+	BaseOutPin                   uint8
+	OutShiftMovesRight           bool
+	OutWriteEnableBitIndex       uint8
+	OutWriteEnableUsed           bool
 	OutputShiftRegister          uint32
 	OutputShiftRegisterCounter   uint8
-	PullThreshold                uint8
-	OutShiftMovesRight           bool
-	OutWriteEnableUsed           bool
-	OutWriteEnableBitIndex       uint8
-	StickyOutSetAssertionEnabled bool
-	BaseOutPin                   uint8
 	PinCountOut                  uint8
+	PullThreshold                uint8
+	StickyOutSetAssertionEnabled bool
 
 	FIFOTX fifo.Reader
 }
 
 type OutOutput struct {
+	NewEXECdInstruction bool
+	EXECdInstruction    uint16
+
+	Jumped            bool
+	NewProgramCounter uint8
+
+	WrittenToInputShiftRegister  bool
+	NewInputShiftRegister        uint32
+	NewInputShiftRegisterCounter uint8
+
 	NewOutputShiftRegister        uint32
 	NewOutputShiftRegisterCounter uint8
-	ShouldStall                   bool
 
 	NewPinOutputEnables     uint32
 	NewPinOutputEnablesMask uint32
@@ -37,16 +46,7 @@ type OutOutput struct {
 	NewXRegister            uint32
 	WrittenToYRegister      bool
 	NewYRegister            uint32
-
-	Jumped            bool
-	NewProgramCounter uint8
-
-	WrittenToInputShiftRegister  bool
-	NewInputShiftRegister        uint32
-	NewInputShiftRegisterCounter uint8
-
-	NewEXECdInstruction bool
-	EXECdInstruction    uint16
+	ShouldStall             bool
 }
 
 var ErrOutDestinationInvalid = errors.New("out destination invalid")

@@ -12,16 +12,16 @@ import (
 )
 
 type RP2040Observer interface {
-	PIOObserver(uint) (pioblock.Observer, error)
-	GPIOObserver(uint) (gpio.Observer, error)
-	PadObserver(uint) (pad.Observer, error)
+	PIOObserver(uint8) (pioblock.Observer, error)
+	GPIOObserver(uint8) (gpio.Observer, error)
+	PadObserver(uint8) (pad.Observer, error)
 }
 type RP2040Configurator interface {
 	SetLabel(string)
-	PIOConfigurator(uint) (pioblock.Configurator, error)
-	GPIOConfigurator(uint) (gpio.Configurator, error)
-	PadConfigurator(uint) (pad.Configurator, error)
-	Connection(uint) (simulation.Connection, error)
+	PIOConfigurator(uint8) (pioblock.Configurator, error)
+	GPIOConfigurator(uint8) (gpio.Configurator, error)
+	PadConfigurator(uint8) (pad.Configurator, error)
+	Connection(uint8) (simulation.Connection, error)
 }
 type RP2040Operator interface {
 	simulation.Ticker
@@ -59,21 +59,21 @@ func NewRP2040(label string) *RP2040 {
 
 var ErrOutOfRange = errors.New("out of range")
 
-func (r *RP2040) PIO(i uint) (*pioblock.PIOBlock, error) {
+func (r *RP2040) PIO(i uint8) (*pioblock.PIOBlock, error) {
 	if i >= rp2040PIOCount {
 		return nil, fmt.Errorf("%w: %d, should be < %d", ErrOutOfRange, i, rp2040PIOCount)
 	}
 	return r.pioBlocks[i], nil
 }
 
-func (r *RP2040) GPIO(i uint) (*gpio.GPIO, error) {
+func (r *RP2040) GPIO(i uint8) (*gpio.GPIO, error) {
 	if i >= rp2040PadCount {
 		return nil, fmt.Errorf("%w: %d, should be < %d", ErrOutOfRange, i, rp2040PadCount)
 	}
 	return r.gpios[i], nil
 }
 
-func (r *RP2040) Pad(i uint) (*pad.Pad, error) {
+func (r *RP2040) Pad(i uint8) (*pad.Pad, error) {
 	if i >= rp2040PadCount {
 		return nil, fmt.Errorf("%w: %d, should be < %d", ErrOutOfRange, i, rp2040PadCount)
 	}
@@ -84,13 +84,13 @@ func (r *RP2040) Observer() RP2040Observer {
 	return r
 }
 
-func (r *RP2040) PIOObserver(i uint) (pioblock.Observer, error) {
+func (r *RP2040) PIOObserver(i uint8) (pioblock.Observer, error) {
 	return r.PIO(i)
 }
-func (r *RP2040) GPIOObserver(i uint) (gpio.Observer, error) {
+func (r *RP2040) GPIOObserver(i uint8) (gpio.Observer, error) {
 	return r.GPIO(i)
 }
-func (r *RP2040) PadObserver(i uint) (pad.Observer, error) {
+func (r *RP2040) PadObserver(i uint8) (pad.Observer, error) {
 	return r.Pad(i)
 }
 
@@ -100,16 +100,16 @@ func (r *RP2040) Configurator() RP2040Configurator {
 
 func (r *RP2040) SetLabel(label string) { r.label = label }
 
-func (r *RP2040) PIOConfigurator(i uint) (pioblock.Configurator, error) {
+func (r *RP2040) PIOConfigurator(i uint8) (pioblock.Configurator, error) {
 	return r.PIO(i)
 }
-func (r *RP2040) GPIOConfigurator(i uint) (gpio.Configurator, error) {
+func (r *RP2040) GPIOConfigurator(i uint8) (gpio.Configurator, error) {
 	return r.GPIO(i)
 }
-func (r *RP2040) PadConfigurator(i uint) (pad.Configurator, error) {
+func (r *RP2040) PadConfigurator(i uint8) (pad.Configurator, error) {
 	return r.Pad(i)
 }
-func (r *RP2040) Connection(i uint) (simulation.Connection, error) {
+func (r *RP2040) Connection(i uint8) (simulation.Connection, error) {
 	return r.Pad(i)
 }
 

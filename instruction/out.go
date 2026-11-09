@@ -1,6 +1,6 @@
 package instruction
 
-const InstructionTypeOut Type = 0b011
+const TypeOut Type = 0b011
 
 type OutDestination uint8
 
@@ -43,5 +43,5 @@ func DecodeOut(instr uint16) Out {
 }
 
 func (o Out) Encode() uint16 {
-	return uint16(InstructionTypeOut)<<13 | uint16(o.destination)<<5 | uint16(o.bitCount)
+	return uint16(TypeOut)<<13 | uint16(o.destination)<<5 | uint16(o.bitCount)
 }

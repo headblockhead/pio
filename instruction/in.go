@@ -1,6 +1,6 @@
 package instruction
 
-const InstructionTypeIn Type = 0b010
+const TypeIn Type = 0b010
 
 type InSource uint8
 
@@ -26,7 +26,12 @@ func NewIn(source InSource, bitCount uint8) In {
 }
 
 func (i In) Source() InSource { return i.source }
-func (i In) BitCount() uint8  { return i.bitCount }
+func (i In) BitCount() uint8 {
+	if i.bitCount == 0 {
+		return 32
+	}
+	return i.bitCount
+}
 
 func DecodeIn(instr uint16) In {
 	return In{
@@ -36,5 +41,5 @@ func DecodeIn(instr uint16) In {
 }
 
 func (i In) Encode() uint16 {
-	return uint16(InstructionTypeIn)<<13 | uint16(i.source)<<5 | uint16(i.bitCount)
+	return uint16(TypeIn)<<13 | uint16(i.source)<<5 | uint16(i.bitCount)
 }

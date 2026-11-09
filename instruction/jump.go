@@ -1,6 +1,6 @@
 package instruction
 
-const InstructionTypeJump Type = 0b000
+const TypeJump Type = 0b000
 
 type JumpCondition uint8
 
@@ -38,5 +38,5 @@ func DecodeJump(instr uint16) Jump {
 }
 
 func (j Jump) Encode() uint16 {
-	return uint16(InstructionTypeJump)<<13 | uint16(j.condition)<<5 | uint16(j.address)
+	return uint16(TypeJump)<<13 | uint16(j.condition)<<5 | uint16(j.address)
 }
