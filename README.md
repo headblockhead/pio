@@ -26,9 +26,11 @@ Instead, this emulator opts to use a simplified digital model, which is enough t
 
 ### Limitations
 
-Some areas of the PIO's logic are not fully publicly documented in as thorough detail as the rest, and while most of the time I was able to confirm using actual hardware, some educated assumptions have been used in areas where documentation is particularly lacking, and the functionality is inconvenient to create a hardware test for (I'm looking at you, `OUT_STICKY` and `INLINE_OUT_EN`). This should not affect functionality in the vast majority of cases.
+Some areas of the PIO's logic are not fully publicly documented in as thorough detail as the rest, and while most of the time I was able to confirm using actual hardware, some educated assumptions have been used in areas where documentation is particularly lacking, and the functionality is inconvenient to create a hardware test for (I'm looking at you, `OUT_STICKY` and `INLINE_OUT_EN`).
+This should not affect functionality in the vast majority of cases.
 
-This package does not (yet) include an assembler. This means that instructions must be converted to bytecode before they are run using this emulator. This may change in the future.
+This package does not (yet) include an assembler.
+This means that emulated programs must be created using helper functions to encode each instruction, rather than being generated directly from `.pio` files.
 
 Finally, this package does not come with a GUI, however it would be nice to be able to interact with the features of this package using a GUI in the future.
 I have created a repo ([pio-gtk](https://github.com/headblockhead/pio-gtk)) in which I may build a GUI when I have the time.
