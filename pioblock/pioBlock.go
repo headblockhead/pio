@@ -28,6 +28,7 @@ type Configurator interface {
 
 	SetPinOutput(uint, bool) error
 	SetPinOutputEnable(uint, bool) error
+	SetIRQ(uint, bool) error
 }
 
 type Operator interface {
@@ -96,7 +97,7 @@ func (p *PIOBlock) StateMachineObserver(i uint) (statemachine.Observer, error) {
 	return p.StateMachine(i)
 }
 
-func (p *PIOBlock) IRQs() uint8            { return p.irqs }
+func (p *PIOBlock) IRQs() uint8              { return p.irqs }
 func (p *PIOBlock) PinInputs() uint32        { return p.pinInputs }
 func (p *PIOBlock) PinOutputEnables() uint32 { return p.pinOutputEnables }
 func (p *PIOBlock) PinOutputs() uint32       { return p.pinOutputs }
@@ -131,6 +132,18 @@ func (p *PIOBlock) SetPinOutputEnable(i uint, v bool) error {
 		p.pinOutputEnables |= (0b1 << i)
 	} else {
 		p.pinOutputEnables &= ^(0b1 << i)
+	}
+	return nil
+}
+
+func (p *PIOBlock) SetIRQ(i uint, v bool) error {
+	if i > 7 {
+		return fmt.Errorf("%w: %d, should be < 8", ErrOutOfRange, i)
+	}
+	if v {
+		p.irqs |= (0b1 << i)
+	} else {
+		p.irqs &= ^(0b1 << i)
 	}
 	return nil
 }
