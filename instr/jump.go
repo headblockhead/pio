@@ -1,5 +1,7 @@
 package instr
 
+import "fmt"
+
 const TypeJump Type = 0b000
 
 type JumpCondition uint
@@ -14,6 +16,29 @@ const (
 	JumpPin                   JumpCondition = 0b110
 	JumpOSRENotEmpty          JumpCondition = 0b111
 )
+
+func (j JumpCondition) String() string {
+	switch j {
+	case JumpAlways:
+		return ""
+	case JumpXZero:
+		return "!x"
+	case JumpXNonZeroThenDecrement:
+		return "x--"
+	case JumpYZero:
+		return "!y"
+	case JumpYNonZeroThenDecrement:
+		return "y--"
+	case JumpXNotEqualY:
+		return "x!=y"
+	case JumpPin:
+		return "pin"
+	case JumpOSRENotEmpty:
+		return "!osre"
+	default:
+		return "ERR"
+	}
+}
 
 type Jump struct {
 	condition JumpCondition
@@ -39,4 +64,11 @@ func DecodeJump(instr uint16) Jump {
 
 func (j Jump) Encode() uint16 {
 	return uint16(TypeJump)<<13 | uint16(j.condition)<<5 | uint16(j.address)
+}
+
+func (j Jump) String() string {
+	if j.Condition() != JumpAlways {
+		return fmt.Sprintf("jmp %s %d", j.Condition(), j.address)
+	}
+	return fmt.Sprintf("jmp %d", j.address)
 }

@@ -1,5 +1,7 @@
 package instr
 
+import "fmt"
+
 const TypeIn Type = 0b010
 
 type InSource uint
@@ -12,6 +14,25 @@ const (
 	InSourceISR  InSource = 0b110
 	InSourceOSR  InSource = 0b111
 )
+
+func (s InSource) String() string {
+	switch s {
+	case InSourcePins:
+		return "pins"
+	case InSourceX:
+		return "x"
+	case InSourceY:
+		return "y"
+	case InSourceNull:
+		return "null"
+	case InSourceISR:
+		return "isr"
+	case InSourceOSR:
+		return "osr"
+	default:
+		return "ERR"
+	}
+}
 
 type In struct {
 	source   InSource
@@ -42,4 +63,8 @@ func DecodeIn(instr uint16) In {
 
 func (i In) Encode() uint16 {
 	return uint16(TypeIn)<<13 | uint16(i.source)<<5 | uint16(i.bitCount)
+}
+
+func (i In) String() string {
+	return fmt.Sprintf("in %s, %d", i.source, i.BitCount())
 }

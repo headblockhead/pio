@@ -1,5 +1,7 @@
 package instr
 
+import "fmt"
+
 const TypeWait Type = 0b001
 
 type WaitSource uint
@@ -42,4 +44,17 @@ func (w Wait) Encode() uint16 {
 		encoded |= 0b1 << 7
 	}
 	return encoded
+}
+
+func (w Wait) String() string {
+	var polarity string
+	if w.polarity {
+		polarity = "1"
+	} else {
+		polarity = "0"
+	}
+	if w.source == WaitSourceIRQ && (w.index>>4)&0b1 == 1 {
+		return fmt.Sprintf("wait %s irq %d rel", polarity, w.index&0b1111)
+	}
+	return fmt.Sprintf("wait %s %s %d", polarity, w.source, w.index)
 }

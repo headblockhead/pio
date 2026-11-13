@@ -1,5 +1,7 @@
 package instr
 
+import "fmt"
+
 const TypeIRQ Type = 0b110
 
 type IRQ struct {
@@ -37,4 +39,16 @@ func (i IRQ) Encode() uint16 {
 		encoded |= 0b1 << 5
 	}
 	return encoded
+}
+
+func (i IRQ) String() string {
+	s := "irq"
+	if i.clear {
+		s += " clear"
+	}
+	if i.wait {
+		s += " wait"
+	}
+	s += fmt.Sprintf(" %d", i.index)
+	return s
 }

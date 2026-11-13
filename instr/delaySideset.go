@@ -1,5 +1,7 @@
 package instr
 
+import "fmt"
+
 type Delay struct {
 	cycles uint
 }
@@ -20,6 +22,10 @@ func DecodeDelay(instr uint16, bitCountSideset uint) Delay {
 
 func (d Delay) Encode() uint16 {
 	return uint16(d.cycles) << 8
+}
+
+func (d Delay) String() string {
+	return fmt.Sprintf("[%02d]", d.cycles)
 }
 
 type Sideset struct {
@@ -58,4 +64,11 @@ func (s Sideset) Encode(pinCountSideset uint, sidesetIsOptional bool) uint16 {
 		return 0b1<<12 | uint16(s.data)<<(12-pinCountSideset)
 	}
 	return uint16(s.data) << (13 - pinCountSideset)
+}
+
+func (s Sideset) String(pinCountSideset uint, sidesetIsOptional bool) string {
+	if sidesetIsOptional && !s.active {
+		return ""
+	}
+	return fmt.Sprintf("side %d", s.data)
 }

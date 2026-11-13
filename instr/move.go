@@ -1,5 +1,7 @@
 package instr
 
+import "fmt"
+
 const TypeMove Type = 0b101
 
 type MoveDestination uint
@@ -27,6 +29,61 @@ const (
 	MoveSourceISR    MoveSource = 0b110
 	MoveSourceOSR    MoveSource = 0b111
 )
+
+func (md MoveDestination) String() string {
+	switch md {
+	case MoveDestinationPins:
+		return "pins"
+	case MoveDestinationX:
+		return "x"
+	case MoveDestinationY:
+		return "y"
+	case MoveDestinationEXEC:
+		return "exec"
+	case MoveDestinationPC:
+		return "pc"
+	case MoveDestinationISR:
+		return "isr"
+	case MoveDestinationOSR:
+		return "osr"
+	default:
+		return "ERR"
+	}
+}
+
+func (mo MoveOperation) String() string {
+	switch mo {
+	case MoveOperationNone:
+		return ""
+	case MoveOperationInvert:
+		return "~"
+	case MoveOperationBitReverse:
+		return "::"
+	default:
+		return "ERR"
+	}
+}
+
+func (ms MoveSource) String() string {
+	switch ms {
+	case MoveSourcePins:
+		return "pins"
+	case MoveSourceX:
+		return "x"
+	case MoveSourceY:
+		return "y"
+	case MoveSourceNull:
+		return "null"
+	case MoveSourceStatus:
+		return "status"
+	case MoveSourceISR:
+		return "isr"
+	case MoveSourceOSR:
+		return "osr"
+	default:
+		return "ERR"
+	}
+}
 
 type Move struct {
 	destination MoveDestination
@@ -56,4 +113,14 @@ func DecodeMove(instr uint16) Move {
 
 func (m Move) Encode() uint16 {
 	return uint16(TypeMove)<<13 | uint16(m.destination)<<5 | uint16(m.operation)<<3 | uint16(m.source)
+}
+
+func (m Move) String() string {
+	if (m.destination == MoveDestinationY && m.operation == MoveOperationNone && m.source == MoveSourceY) || (m.destination == MoveDestinationX && m.operation == MoveOperationNone && m.source == MoveSourceX) {
+		return "nop"
+	}
+	if m.operation != MoveOperationNone {
+		return fmt.Sprintf("mov %s, %s %s", m.destination, m.operation, m.source)
+	}
+	return fmt.Sprintf("mov %s, %s", m.destination, m.source)
 }

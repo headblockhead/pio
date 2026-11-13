@@ -41,3 +41,24 @@ func (p PushPull) Encode() uint16 {
 	}
 	return encoded
 }
+
+func (p PushPull) String() string {
+	s := ""
+	if p.isPull {
+		s += "pull"
+		if p.ifThreshold {
+			s += " ifempty"
+		}
+	} else {
+		s += "push"
+		if p.ifThreshold {
+			s += " iffull"
+		}
+	}
+	if p.block {
+		s += " block"
+	} else {
+		s += " noblock"
+	}
+	return s
+}

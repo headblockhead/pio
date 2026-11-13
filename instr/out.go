@@ -1,5 +1,7 @@
 package instr
 
+import "fmt"
+
 const TypeOut Type = 0b011
 
 type OutDestination uint
@@ -14,6 +16,29 @@ const (
 	OutDestinationInputShiftRegister OutDestination = 0b110
 	OutDestinationEXEC               OutDestination = 0b111
 )
+
+func (o OutDestination) String() string {
+	switch o {
+	case OutDestinationPins:
+		return "pins"
+	case OutDestinationX:
+		return "x"
+	case OutDestinationY:
+		return "y"
+	case OutDestinationNull:
+		return "null"
+	case OutDestinationPinDirections:
+		return "pindirs"
+	case OutDestinationProgramCounter:
+		return "pc"
+	case OutDestinationInputShiftRegister:
+		return "isr"
+	case OutDestinationEXEC:
+		return "exec"
+	default:
+		return "ERR"
+	}
+}
 
 type Out struct {
 	destination OutDestination
@@ -44,4 +69,8 @@ func DecodeOut(instr uint16) Out {
 
 func (o Out) Encode() uint16 {
 	return uint16(TypeOut)<<13 | uint16(o.destination)<<5 | uint16(o.bitCount)
+}
+
+func (o Out) String() string {
+	return fmt.Sprintf("out %s, %d", o.destination, o.BitCount())
 }

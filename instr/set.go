@@ -1,5 +1,7 @@
 package instr
 
+import "fmt"
+
 const TypeSet Type = 0b111
 
 type SetDestination uint
@@ -10,6 +12,21 @@ const (
 	SetDestinationY             SetDestination = 0b010
 	SetDestinationPinDirections SetDestination = 0b100
 )
+
+func (s SetDestination) String() string {
+	switch s {
+	case SetDestinationPins:
+		return "pins"
+	case SetDestinationX:
+		return "x"
+	case SetDestinationY:
+		return "y"
+	case SetDestinationPinDirections:
+		return "pindirs"
+	default:
+		return "ERR"
+	}
+}
 
 type Set struct {
 	destination SetDestination
@@ -35,4 +52,8 @@ func DecodeSet(instruction uint16) Set {
 
 func (s Set) Encode() uint16 {
 	return uint16(TypeSet)<<13 | uint16(s.destination)<<5 | uint16(s.data)
+}
+
+func (s Set) String() string {
+	return fmt.Sprintf("set %s, %d", s.destination, s.data)
 }
