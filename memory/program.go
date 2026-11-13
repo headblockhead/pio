@@ -1,5 +1,11 @@
 package memory
 
+import (
+	"fmt"
+
+	"git.edwardh.dev/pio/instr"
+)
+
 type Program struct {
 	instructions []uint16
 	hasOrigin    bool
@@ -32,4 +38,18 @@ func (p *Program) HasOrigin() bool {
 
 func (p *Program) Origin() uint {
 	return p.origin
+}
+
+func (p *Program) Strings(pinCountSideset uint, sidesetIsOptional bool) ([]string, error) {
+	var s []string
+
+	for i, instruction := range p.instructions {
+		ins, err := instr.String(instruction, pinCountSideset, sidesetIsOptional)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decode instruction: %w", err)
+		}
+		s = append(s, fmt.Sprintf("% 2d: %s", i, ins))
+	}
+
+	return s, nil
 }

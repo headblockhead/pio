@@ -42,13 +42,15 @@ func (i IRQ) Encode() uint16 {
 }
 
 func (i IRQ) String() string {
-	s := "irq"
+	var s string = "irq    "
 	if i.clear {
-		s += " clear"
+		s += "clear "
 	}
 	if i.wait {
-		s += " wait"
+		s += "wait "
 	}
-	s += fmt.Sprintf(" %d", i.index)
-	return s
+	if (i.index>>4)&0b1 == 1 {
+		return fmt.Sprintf("%s%d rel", s, i.index&0b1111)
+	}
+	return fmt.Sprintf("%s%d", s, i.index)
 }

@@ -111,7 +111,7 @@ func main() {
 	// The simulation will be run forever until it is manually stopped.
 	for {
 		// Draw the state to the terminal. (see tui.go)
-		programStateDraw(programStateRender(aSM0, bSM0, signalNet.LogicLevel()))
+		programStateDraw(programStateRender(programTX, programRX, aSM0, bSM0, signalNet.LogicLevel()))
 
 		// If RP2040 A's TX FIFO is not full, it will be given another word to transmit.
 		if !aTXWriter.IsFull() {
@@ -130,12 +130,10 @@ func main() {
 		if !bRXReader.IsEmpty() {
 			// Read the word from RP2040 B's RX FIFO.
 			incomingWord, _ := bRXReader.Read() // pio_sm_get_blocking
-			select {
-			case previousTXWord := <-verifyWords:
-				if incomingWord != previousTXWord {
-					err := fmt.Errorf("RP2040 B got 0b%032b (0x%08X), expected 0b%032b (0x%08X)", incomingWord, incomingWord, previousTXWord, previousTXWord)
-					panic(err)
-				}
+			previousTXWord := <-verifyWords
+			if incomingWord != previousTXWord {
+				err := fmt.Errorf("RP2040 B got 0b%032b (0x%08X), expected 0b%032b (0x%08X)", incomingWord, incomingWord, previousTXWord, previousTXWord)
+				panic(err)
 			}
 		}
 

@@ -1,6 +1,8 @@
 package instr
 
-import "fmt"
+import (
+	"fmt"
+)
 
 const TypeIn Type = 0b010
 
@@ -30,7 +32,7 @@ func (s InSource) String() string {
 	case InSourceOSR:
 		return "osr"
 	default:
-		return "ERR"
+		return fmt.Sprintf("instr.InSource(%d)", s)
 	}
 }
 
@@ -66,5 +68,5 @@ func (i In) Encode() uint16 {
 }
 
 func (i In) String() string {
-	return fmt.Sprintf("in %s, %d", i.source, i.BitCount())
+	return fmt.Sprintf("in     %s, %d", i.source, i.BitCount())
 }

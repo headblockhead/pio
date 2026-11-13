@@ -2,46 +2,40 @@ package main
 
 import (
 	"fmt"
-	"git.edwardh.dev/pio/statemachine"
 	"slices"
+
+	"git.edwardh.dev/pio/memory"
+	"git.edwardh.dev/pio/statemachine"
 )
 
 // This file deals with drawing the state of the RP2040s to the terminal, and is a bit messy.
 // For the usage example, see main.go.
 
-var programTXStrings = []string{
-	"0: out   x, 1             ",
-	"1: jmp   !x, 4 side 1 [6] ",
-	"2: nop                    ",
-	"3: jmp   0     side 0 [6] ",
-	"4: jmp   5            [7] ",
-	"5: out   x, 1             ",
-	"6: jmp   !x, 9 side 0 [6] ",
-	"7: nop                    ",
-	"8: jmp   5     side 1 [6] ",
-	"9: jmp   0            [7] ",
-}
-
-var programRXStrings = []string{
-	"0: wait  1 pin, 0 [11]",
-	"1: jmp   pin, 4       ",
-	"2: in    x, 1         ",
-	"3: jmp   0            ",
-	"4: in    y, 1     [1] ",
-	"5: wait  0 pin, 0 [11]",
-	"6: jmp   pin, 9       ",
-	"7: in    y, 1         ",
-	"8: jmp   0            ",
-	"9: in    x, 1     [1] ",
-}
-
 var logicHistory []bool = []bool{}
 var line string = "--------------------------------------------------------------------------------"
 
-func programStateRender(smA *statemachine.StateMachine, smB *statemachine.StateMachine, currentLogic bool) []string {
+func programStateRender(programTX *memory.Program, programRX *memory.Program, smA *statemachine.StateMachine, smB *statemachine.StateMachine, currentLogic bool) []string {
 	logicHistory = append(logicHistory, currentLogic)
 	if len(logicHistory) > len(line) {
 		logicHistory = logicHistory[1:]
+	}
+
+	txPinCount := smA.BitCountSideset()
+	if smA.SidesetIsOptional() {
+		txPinCount--
+	}
+	programTXStrings, err := programTX.Strings(txPinCount, smA.SidesetIsOptional())
+	if err != nil {
+		panic(err)
+	}
+
+	rxPinCount := smB.BitCountSideset()
+	if smB.SidesetIsOptional() {
+		rxPinCount--
+	}
+	programRXStrings, err := programRX.Strings(rxPinCount, smB.SidesetIsOptional())
+	if err != nil {
+		panic(err)
 	}
 
 	pcA := smA.ProgramCounter()
@@ -68,7 +62,7 @@ func programStateRender(smA *statemachine.StateMachine, smB *statemachine.StateM
 
 	finalProgs := []string{line0, line1, line2, line3, line4, line5, ""}
 	for i := range max(len(programTXStrings), len(programRXStrings)) {
-		finalProgs = append(finalProgs, string(progTXNew[i]+"              "+progRXNew[i]))
+		finalProgs = append(finalProgs, string(progTXNew[i]+progRXNew[i]))
 	}
 
 	finalProgs = append(finalProgs, "")

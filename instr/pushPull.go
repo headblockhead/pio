@@ -43,22 +43,22 @@ func (p PushPull) Encode() uint16 {
 }
 
 func (p PushPull) String() string {
-	s := ""
+	var s string
 	if p.isPull {
-		s += "pull"
+		s = "pull   "
 		if p.ifThreshold {
-			s += " ifempty"
+			s += "ifempty "
 		}
 	} else {
-		s += "push"
+		s = "push   "
 		if p.ifThreshold {
-			s += " iffull"
+			s += "iffull "
 		}
 	}
 	if p.block {
-		s += " block"
+		s += "block"
 	} else {
-		s += " noblock"
+		s += "noblock"
 	}
 	return s
 }

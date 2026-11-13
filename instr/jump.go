@@ -36,7 +36,7 @@ func (j JumpCondition) String() string {
 	case JumpOSRENotEmpty:
 		return "!osre"
 	default:
-		return "ERR"
+		return fmt.Sprintf("instr.JumpCondition(%d)", j)
 	}
 }
 
@@ -68,7 +68,7 @@ func (j Jump) Encode() uint16 {
 
 func (j Jump) String() string {
 	if j.Condition() != JumpAlways {
-		return fmt.Sprintf("jmp %s %d", j.Condition(), j.address)
+		return fmt.Sprintf("jmp    %s, %d", j.Condition(), j.address)
 	}
-	return fmt.Sprintf("jmp %d", j.address)
+	return fmt.Sprintf("jmp    %d", j.address)
 }

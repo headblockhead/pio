@@ -24,7 +24,7 @@ func (s SetDestination) String() string {
 	case SetDestinationPinDirections:
 		return "pindirs"
 	default:
-		return "ERR"
+		return fmt.Sprintf("instr.SetDestination(%d)", s)
 	}
 }
 
@@ -55,5 +55,5 @@ func (s Set) Encode() uint16 {
 }
 
 func (s Set) String() string {
-	return fmt.Sprintf("set %s, %d", s.destination, s.data)
+	return fmt.Sprintf("set    %s, %d", s.destination, s.data)
 }

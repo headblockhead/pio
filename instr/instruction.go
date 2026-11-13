@@ -8,7 +8,7 @@ func DecodeType(instr uint16) Type {
 	return Type(instr >> 13)
 }
 
-func String(instr uint16, pinCountSideset uint, sidesetIsOptional bool) string {
+func String(instr uint16, pinCountSideset uint, sidesetIsOptional bool) (string, error) {
 	t := DecodeType(instr)
 	var decoded fmt.Stringer
 	switch t {
@@ -29,7 +29,7 @@ func String(instr uint16, pinCountSideset uint, sidesetIsOptional bool) string {
 	case TypeSet:
 		decoded = DecodeSet(instr)
 	default:
-		return "ERR"
+		return "", fmt.Errorf("unknown instruction type: %d", t)
 	}
 	sideset := DecodeSideset(instr, pinCountSideset, sidesetIsOptional)
 	bitCountSideset := pinCountSideset
@@ -37,5 +37,5 @@ func String(instr uint16, pinCountSideset uint, sidesetIsOptional bool) string {
 		bitCountSideset++
 	}
 	delay := DecodeDelay(instr, bitCountSideset)
-	return fmt.Sprintf("%s %s %s", decoded, sideset, delay)
+	return fmt.Sprintf("%-23s %-7s %-4s", decoded, sideset, delay), nil
 }

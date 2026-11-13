@@ -25,7 +25,10 @@ func (d Delay) Encode() uint16 {
 }
 
 func (d Delay) String() string {
-	return fmt.Sprintf("[%02d]", d.cycles)
+	if d.cycles == 0 {
+		return ""
+	}
+	return fmt.Sprintf("[%d]", d.cycles)
 }
 
 type Sideset struct {
@@ -66,9 +69,9 @@ func (s Sideset) Encode(pinCountSideset uint, sidesetIsOptional bool) uint16 {
 	return uint16(s.data) << (13 - pinCountSideset)
 }
 
-func (s Sideset) String(pinCountSideset uint, sidesetIsOptional bool) string {
-	if sidesetIsOptional && !s.active {
-		return ""
+func (s Sideset) String() string {
+	if !s.active {
+		return "       "
 	}
-	return fmt.Sprintf("side %d", s.data)
+	return fmt.Sprintf("side %2d", s.data)
 }

@@ -47,7 +47,7 @@ func (md MoveDestination) String() string {
 	case MoveDestinationOSR:
 		return "osr"
 	default:
-		return "ERR"
+		return fmt.Sprintf("instr.MoveDestination(%d)", md)
 	}
 }
 
@@ -60,7 +60,7 @@ func (mo MoveOperation) String() string {
 	case MoveOperationBitReverse:
 		return "::"
 	default:
-		return "ERR"
+		return fmt.Sprintf("instr.MoveOperation(%d)", mo)
 	}
 }
 
@@ -81,7 +81,7 @@ func (ms MoveSource) String() string {
 	case MoveSourceOSR:
 		return "osr"
 	default:
-		return "ERR"
+		return fmt.Sprintf("instr.MoveSource(%d)", ms)
 	}
 }
 
@@ -120,7 +120,7 @@ func (m Move) String() string {
 		return "nop"
 	}
 	if m.operation != MoveOperationNone {
-		return fmt.Sprintf("mov %s, %s %s", m.destination, m.operation, m.source)
+		return fmt.Sprintf("mov    %s, %s%s", m.destination, m.operation, m.source)
 	}
-	return fmt.Sprintf("mov %s, %s", m.destination, m.source)
+	return fmt.Sprintf("mov    %s, %s", m.destination, m.source)
 }

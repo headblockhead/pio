@@ -12,6 +12,19 @@ const (
 	WaitSourceIRQ  WaitSource = 0b10
 )
 
+func (ws WaitSource) String() string {
+	switch ws {
+	case WaitSourceGPIO:
+		return "gpio"
+	case WaitSourcePin:
+		return "pin"
+	case WaitSourceIRQ:
+		return "irq"
+	default:
+		return fmt.Sprintf("instr.WaitSource(%d)", ws)
+	}
+}
+
 type Wait struct {
 	polarity bool
 	source   WaitSource
@@ -53,8 +66,9 @@ func (w Wait) String() string {
 	} else {
 		polarity = "0"
 	}
+	s := fmt.Sprintf("wait   %s %s", polarity, w.source)
 	if w.source == WaitSourceIRQ && (w.index>>4)&0b1 == 1 {
-		return fmt.Sprintf("wait %s irq %d rel", polarity, w.index&0b1111)
+		return fmt.Sprintf("%s %d rel", s, w.index&0b1111)
 	}
-	return fmt.Sprintf("wait %s %s %d", polarity, w.source, w.index)
+	return fmt.Sprintf("%s %d", s, w.index)
 }

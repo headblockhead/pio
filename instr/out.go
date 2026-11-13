@@ -36,7 +36,7 @@ func (o OutDestination) String() string {
 	case OutDestinationEXEC:
 		return "exec"
 	default:
-		return "ERR"
+		return fmt.Sprintf("instr.OutDestination(%d)", o)
 	}
 }
 
@@ -72,5 +72,5 @@ func (o Out) Encode() uint16 {
 }
 
 func (o Out) String() string {
-	return fmt.Sprintf("out %s, %d", o.destination, o.BitCount())
+	return fmt.Sprintf("out    %s, %d", o.destination, o.BitCount())
 }
