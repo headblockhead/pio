@@ -74,7 +74,7 @@ func (s Sideset) Encode(pinCountSideset uint, sidesetIsOptional bool) uint16 {
 
 func (s Sideset) String() string {
 	if !s.active {
-		return "       "
+		return ""
 	}
 	return fmt.Sprintf("side %2d", s.data)
 }
