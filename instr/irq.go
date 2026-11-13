@@ -42,7 +42,7 @@ func (i IRQ) Encode() uint16 {
 }
 
 func (i IRQ) String() string {
-	var s string = "irq    "
+	s := "irq    "
 	if i.clear {
 		s += "clear "
 	}

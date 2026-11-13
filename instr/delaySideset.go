@@ -47,6 +47,9 @@ func (s Sideset) Data() uint   { return s.data }
 func (s Sideset) Active() bool { return s.active }
 
 func DecodeSideset(instr uint16, pinCountSideset uint, sidesetIsOptional bool) Sideset {
+	if pinCountSideset == 0 {
+		return Sideset{active: false}
+	}
 	lsbPosition := 13 - pinCountSideset
 	if sidesetIsOptional {
 		if (instr>>12)&0b1 != 1 {
