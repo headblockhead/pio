@@ -46,9 +46,13 @@ func (p *Program) Strings(pinCountSideset uint, sidesetIsOptional bool) ([]strin
 	for i, instruction := range p.instructions {
 		ins, err := instr.String(instruction, pinCountSideset, sidesetIsOptional)
 		if err != nil {
-			return nil, fmt.Errorf("failed to decode instruction: %w", err)
+			return nil, fmt.Errorf("error decoding instruction %d: %w", i, err)
 		}
-		s = append(s, fmt.Sprintf("% 2d: %s", i, ins))
+		address := uint(i)
+		if p.hasOrigin {
+			address += p.origin
+		}
+		s = append(s, fmt.Sprintf("%2d: %s", address, ins))
 	}
 
 	return s, nil

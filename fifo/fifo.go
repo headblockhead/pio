@@ -2,7 +2,6 @@ package fifo
 
 import (
 	"errors"
-	"fmt"
 	"slices"
 )
 
@@ -69,7 +68,7 @@ var ErrEmpty = errors.New("empty")
 
 func (f *FIFO) Read() (uint32, error) {
 	if f.IsEmpty() {
-		return 0, fmt.Errorf("reading: %w", ErrEmpty)
+		return 0, ErrEmpty
 	}
 	f.level--
 	value := f.buf[f.tail]
@@ -83,7 +82,7 @@ var ErrFull = errors.New("full")
 
 func (f *FIFO) Write(value uint32) error {
 	if f.IsFull() {
-		return fmt.Errorf("writing 0x%08X: %w", value, ErrFull)
+		return ErrFull
 	}
 	f.level++
 	f.buf[f.head] = value

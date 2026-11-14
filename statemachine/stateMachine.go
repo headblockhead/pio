@@ -388,7 +388,7 @@ func (sm *StateMachine) ClockDivisorInteger() uint32 {
 		return uint32(sm.clockDivisorInteger)
 	}
 }
-func (sm *StateMachine) ClockDivisorFractional() uint8       { return sm.clockDivisorFractional }
+func (sm *StateMachine) ClockDivisorFractional() uint8      { return sm.clockDivisorFractional }
 func (sm *StateMachine) ClockDividerTicksRemaining() uint32 { return sm.clockDividerTicksRemaining }
 func (sm *StateMachine) ClockDividerFractionAccumulator() uint8 {
 	return sm.clockDividerFractionAccumulator
@@ -441,7 +441,7 @@ func (sm *StateMachine) SetEnabled(enabled bool) {
 }
 func (sm *StateMachine) SetSidesetIsOptional(sidesetIsOptional bool) error {
 	if sm.bitCountSideset == 0 && sidesetIsOptional {
-		return fmt.Errorf("%w: sideset should not be optional when bit count is 0", ErrValueOutOfRange)
+		return fmt.Errorf("%w: making sideset optional requires having at least 1 bit dedicated to sideset", ErrValueOutOfRange)
 	}
 	sm.sidesetIsOptional = sidesetIsOptional
 	return nil
@@ -527,7 +527,7 @@ func (sm *StateMachine) SetBitCountSideset(bitCountSideset uint) error {
 		return fmt.Errorf("%w: %d, should be < 6", ErrValueOutOfRange, bitCountSideset)
 	}
 	if sm.sidesetIsOptional && bitCountSideset == 0 {
-		return fmt.Errorf("%w: %d, should be > 0 when sideset is optional", ErrValueOutOfRange, bitCountSideset)
+		return fmt.Errorf("%w: %d, at least 1 bit must be dedicated to sideset while sideset is optional", ErrValueOutOfRange, bitCountSideset)
 	}
 	sm.bitCountSideset = bitCountSideset
 	return nil
@@ -661,10 +661,10 @@ func (sm *StateMachine) SetInShift(movesRight bool, autopushEnabled bool, pushTh
 
 func (sm *StateMachine) SetSideset(bitCountSideset uint, sidesetIsOptional bool, sidesetControlsPinDirection bool) error {
 	if bitCountSideset > 5 {
-		return fmt.Errorf("bit count sideset %w: %d, should be < 6", ErrValueOutOfRange, bitCountSideset)
+		return fmt.Errorf("%w: bitCountSideset %d, should be < 6", ErrValueOutOfRange, bitCountSideset)
 	}
 	if sidesetIsOptional && bitCountSideset == 0 {
-		return fmt.Errorf("bit count sideset %w: %d, should be > 0 when sideset is optional", ErrValueOutOfRange, bitCountSideset)
+		return fmt.Errorf("%w: bitCountSideset %d, at least 1 bit must be dedicated to sideset if sideset is made optional", ErrValueOutOfRange, bitCountSideset)
 	}
 	sm.bitCountSideset = bitCountSideset
 	sm.sidesetIsOptional = sidesetIsOptional
@@ -718,7 +718,7 @@ func (sm *StateMachine) Tick() error {
 	if sm.newForcedInstruction {
 		jumped, stalled, err := sm.execute(sm.forcedInstruction, false)
 		if err != nil {
-			return fmt.Errorf("error executing forced instruction %016b: %w", sm.forcedInstruction, err)
+			return fmt.Errorf("error executing forced instruction 0b%016b: %w", sm.forcedInstruction, err)
 		}
 		sm.newForcedInstruction = false
 		if jumped {
@@ -734,7 +734,7 @@ func (sm *StateMachine) Tick() error {
 	} else if sm.forcedInstructionStalled {
 		_, stalled, err := sm.execute(sm.latchedInstruction, true)
 		if err != nil {
-			return fmt.Errorf("error executing stalled forced instruction %016b: %w", sm.latchedInstruction, err)
+			return fmt.Errorf("error executing stalled forced instruction 0b%016b: %w", sm.latchedInstruction, err)
 		}
 		sm.forcedInstructionStalled = stalled
 	} else if sm.clockDividerTicksRemaining == 0 && sm.enabled {
@@ -758,13 +758,13 @@ func (sm *StateMachine) dividedTick() error {
 		sm.newEXECdInstruction = false
 		_, stalled, err := sm.execute(sm.latchedInstruction, false)
 		if err != nil {
-			return fmt.Errorf("error executing EXEC'd instruction %016b: %w", sm.latchedInstruction, err)
+			return fmt.Errorf("error executing EXEC'd instruction 0b%016b: %w", sm.latchedInstruction, err)
 		}
 		sm.execdInstructionStalled = stalled
 	} else if sm.execdInstructionStalled {
 		_, stalled, err := sm.execute(sm.latchedInstruction, true)
 		if err != nil {
-			return fmt.Errorf("error executing stalled EXEC'd instruction %016b: %w", sm.latchedInstruction, err)
+			return fmt.Errorf("error executing stalled EXEC'd instruction 0b%016b: %w", sm.latchedInstruction, err)
 		}
 		sm.execdInstructionStalled = stalled
 	} else if sm.stalled {
@@ -774,7 +774,7 @@ func (sm *StateMachine) dividedTick() error {
 		}
 		jumped, stalled, err := sm.execute(instruction, true)
 		if err != nil {
-			return fmt.Errorf("error executing stalled instruction %016b: %w", instruction, err)
+			return fmt.Errorf("error executing stalled instruction 0b%016b: %w", instruction, err)
 		}
 		if !jumped && !stalled {
 			sm.incrementProgramCounter()
@@ -793,7 +793,7 @@ func (sm *StateMachine) dividedTick() error {
 		}
 		jumped, stalled, err := sm.execute(instruction, false)
 		if err != nil {
-			return fmt.Errorf("error executing instruction %016b at address %d: %w", instruction, sm.programCounter, err)
+			return fmt.Errorf("error executing instruction 0b%016b at address %d: %w", instruction, sm.programCounter, err)
 		}
 		if !jumped && !stalled {
 			sm.incrementProgramCounter()

@@ -46,7 +46,7 @@ func executePushPull(i instr.PushPull, input pushPullInput) (pushPullOutput, err
 		if shouldPull && !input.fifoTX.IsEmpty() {
 			osr, err := input.fifoTX.Read()
 			if err != nil {
-				return output, fmt.Errorf("error reading TX fifo for pull: %w", err)
+				return output, fmt.Errorf("error reading TX FIFO for pull: %w", err)
 			}
 			output.newOutputShiftRegister = osr
 			output.newOutputShiftRegisterCounter = 0

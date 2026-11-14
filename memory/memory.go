@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+
+	"git.edwardh.dev/pio/instr"
 )
 
 type Observer interface {
@@ -59,10 +61,10 @@ var ErrValueUninitialized = errors.New("value uninitialized")
 
 func (m *Memory) Read(address uint) (uint16, error) {
 	if address >= m.Size() {
-		return 0, fmt.Errorf("address %d: %w", address, ErrOutOfBounds)
+		return 0, fmt.Errorf("%w: address %d", ErrOutOfBounds, address)
 	}
 	if !m.initialized[address] {
-		return 0, fmt.Errorf("address %d: %w", address, ErrValueUninitialized)
+		return 0, fmt.Errorf("%w: address %d", ErrValueUninitialized, address)
 	}
 	return m.data[address], nil
 }
@@ -73,7 +75,7 @@ func (m *Memory) Writer() Writer {
 
 func (m *Memory) Write(address uint, value uint16) error {
 	if address >= m.Size() {
-		return fmt.Errorf("address %d: %w", address, ErrOutOfBounds)
+		return fmt.Errorf("%w: address %d", ErrOutOfBounds, address)
 	}
 	m.data[address] = value
 	m.initialized[address] = true
@@ -82,13 +84,13 @@ func (m *Memory) Write(address uint, value uint16) error {
 
 var ErrExceedsMemorySize = errors.New("exceeds memory size")
 
-func (m *Memory) Copy(source []uint16, destinationStartAddress uint) error {
-	if destinationStartAddress+uint(len(source)) > m.Size() {
-		return fmt.Errorf("destination start address %d with length %d: %w", destinationStartAddress, len(source), ErrExceedsMemorySize)
+func (m *Memory) Copy(source []uint16, toAddress uint) error {
+	if toAddress+uint(len(source)) > m.Size() {
+		return fmt.Errorf("%w %d: address %d + length %d", ErrExceedsMemorySize, len(m.data), toAddress, len(source))
 	}
 	for i, value := range source {
-		m.data[destinationStartAddress+uint(i)] = value
-		m.initialized[destinationStartAddress+uint(i)] = true
+		m.data[toAddress+uint(i)] = value
+		m.initialized[toAddress+uint(i)] = true
 	}
 	return nil
 }
@@ -109,7 +111,7 @@ func (m *Memory) AddProgram(program *Program) (offset uint, err error) {
 		return 0, ErrProgramEmpty
 	}
 	if len(program.Instructions()) > int(m.Size()) {
-		return 0, fmt.Errorf("program length %d: %w", len(program.Instructions()), ErrExceedsMemorySize)
+		return 0, fmt.Errorf("%w %d: program length %d", ErrExceedsMemorySize, m.Size(), len(program.Instructions()))
 	}
 	if program.HasOrigin() {
 		offset := program.Origin()
@@ -131,7 +133,7 @@ func (m *Memory) AddProgramAtOffset(program *Program, offset uint) error {
 		return ErrProgramEmpty
 	}
 	if offset+uint(len(program.Instructions())) > m.Size() {
-		return fmt.Errorf("offset %d with length %d: %w", offset, len(program.Instructions()), ErrExceedsMemorySize)
+		return fmt.Errorf("%w %d: offset %d + program length %d", ErrExceedsMemorySize, m.Size(), offset, len(program.Instructions()))
 	}
 	var programMask uint32 = ((0b1 << len(program.Instructions())) - 1) << offset
 	if programMask&m.programUsageMask != 0 {
@@ -139,13 +141,10 @@ func (m *Memory) AddProgramAtOffset(program *Program, offset uint) error {
 	}
 	updatedInstructions := slices.Clone(program.Instructions())
 	for i, instruction := range updatedInstructions {
-		instructionType := (instruction >> 13) & 0b111
-		// update jump instructions to point to the correct offset
-		if instructionType == 0b000 {
-			var originalAddress = instruction & 0b11111
-			var offsetAddress = originalAddress + uint16(offset)
-			var newInstruction = (instruction & 0b1111111111100000) | (offsetAddress & 0b11111)
-			updatedInstructions[i] = newInstruction
+		if instr.DecodeType(instruction) == instr.TypeJump {
+			originalJump := updatedInstructions[i]
+			// Increase the target of all jump instructions by the offset amount.
+			updatedInstructions[i] = originalJump&0b1111111111100000 | (originalJump+uint16(offset))&0b11111
 		}
 	}
 	err := m.Copy(updatedInstructions, offset)
@@ -159,6 +158,9 @@ func (m *Memory) AddProgramAtOffset(program *Program, offset uint) error {
 func (m *Memory) RemoveProgram(program *Program, loadedOffset uint) error {
 	if len(program.instructions) < 1 {
 		return ErrProgramEmpty
+	}
+	if loadedOffset+uint(len(program.instructions)) > m.Size() {
+		return fmt.Errorf("%w %d: offset %d + program length %d", ErrExceedsMemorySize, m.Size(), loadedOffset, len(program.instructions))
 	}
 	var programMask uint32 = ((0b1 << len(program.instructions)) - 1) << loadedOffset
 	for i := 0; i < len(program.instructions); i++ {

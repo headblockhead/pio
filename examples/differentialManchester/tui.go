@@ -46,7 +46,7 @@ func programStateRender(programTX *memory.Program, programRX *memory.Program, sm
 	line2 := fmt.Sprintf("X:    %d                                 X:    %d       ", smA.XRegister(), smB.XRegister())
 	line3 := fmt.Sprintf("Y:    %d                                 Y:    %d       ", smA.YRegister(), smB.YRegister())
 	line4 := fmt.Sprintf("dlay: %d                                 dlay: %d       ", smA.DelaysRemaining(), smB.DelaysRemaining())
-	line5 := fmt.Sprintf("OSR:  %032b  ISR:  0b%032b", smA.OutputShiftRegister(), smB.InputShiftRegister())
+	line5 := fmt.Sprintf("OSR:  %032b  ISR:  %032b", smA.OutputShiftRegister(), smB.InputShiftRegister())
 
 	progTXNew := slices.Clone(programTXStrings)
 	currentLine := []rune(progTXNew[pcA])

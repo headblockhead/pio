@@ -1,15 +1,12 @@
 package statemachine
 
 import (
-	"errors"
 	"fmt"
 )
 
-var ErrClockDivisorInvalid = errors.New("clock divisor invalid")
-
 func clockDivisorFromFloat32(divisor float32) (divisorInteger uint16, divisorFractional uint8, err error) {
-	if divisor < 1 || divisor > 65536 {
-		return 0, 0, fmt.Errorf("%w: %f", ErrClockDivisorInvalid, divisor)
+	if divisor < 1.0 || divisor > 65536.0 {
+		return 0, 0, fmt.Errorf("%w: %f, should be >=1.0 and <=65536.0", ErrValueOutOfRange, divisor)
 	}
 	if divisor == 65536 {
 		return 0, 0, nil

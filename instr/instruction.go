@@ -8,6 +8,8 @@ func DecodeType(instr uint16) Type {
 	return Type(instr >> 13)
 }
 
+var ErrUnknownInstructionType = fmt.Errorf("unknown instruction type")
+
 func String(instr uint16, pinCountSideset uint, sidesetIsOptional bool) (string, error) {
 	t := DecodeType(instr)
 	var decoded fmt.Stringer
@@ -29,7 +31,7 @@ func String(instr uint16, pinCountSideset uint, sidesetIsOptional bool) (string,
 	case TypeSet:
 		decoded = DecodeSet(instr)
 	default:
-		return "", fmt.Errorf("unknown instruction type: %d", t)
+		return "", fmt.Errorf("%w: instr.Type(%d)", ErrUnknownInstructionType, t)
 	}
 	sideset := DecodeSideset(instr, pinCountSideset, sidesetIsOptional)
 	bitCountSideset := pinCountSideset

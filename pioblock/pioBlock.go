@@ -80,7 +80,7 @@ func New(label string) *PIOBlock {
 
 func (p *PIOBlock) StateMachine(i uint) (*statemachine.StateMachine, error) {
 	if i >= uint(len(p.stateMachines)) {
-		return nil, fmt.Errorf("%d: %w", i, ErrOutOfRange)
+		return nil, fmt.Errorf("%w: %d", ErrOutOfRange, i)
 	}
 	return p.stateMachines[i], nil
 }

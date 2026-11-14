@@ -105,7 +105,7 @@ func TestReadWriteLevel(t *testing.T) {
 				for i := range fillAmount {
 					err := fifo.Write(testingValues[i])
 					if err != nil {
-						t.Fatalf("unexpected error writing value %X (index %d) to fifo: %v", testingValues[i], i, err)
+						t.Fatalf("unexpected error writing value 0x%08X (index %d) to fifo: %v", testingValues[i], i, err)
 					}
 				}
 				if fifo.Level() != uint(fillAmount) {
@@ -124,7 +124,7 @@ func TestReadWriteLevel(t *testing.T) {
 						t.Fatalf("unexpected error reading value from fifo (index %d): %v", i, err)
 					}
 					if expectedValue != actualValue {
-						t.Errorf("expected value %X, got %X (index %d)", expectedValue, actualValue, i)
+						t.Errorf("expected value 0x%08X, got 0x%08X (index %d)", expectedValue, actualValue, i)
 					}
 				}
 				_, err := fifo.Read()
